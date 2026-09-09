@@ -1,0 +1,2177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="KJ//TRACK — a personal weekly kilojoule & macro tracker with label scanning. 100% local, works offline.">
+<meta name="theme-color" content="#0a0a0a">
+<title>KJ//TRACK — Weekly Macro Tracker</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2300ff41'><path d='M13 2 3 14h7l-1 8 10-12h-7l1-8z'/></svg>">
+
+<!-- Tailwind CSS -->
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<!-- Lucide icons -->
+<script src="https://unpkg.com/lucide@latest"></script>
+<!-- Tesseract.js — on-device OCR for label scanning (no data leaves the browser) -->
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<!-- Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+
+<style>
+  /* ===================== THEME ===================== */
+  :root{
+    --bg:#0a0a0a;
+    --green:#00ff41;
+    --green-2:#00cc33;
+    --ink:#e8f5e9;
+    --muted:#7da87d;
+    --faint:#5a705a;
+    color-scheme: dark;
+  }
+  html{ scroll-behavior:smooth }
+  body{
+    font-family:'Inter','Segoe UI',Roboto,system-ui,sans-serif;
+    background:
+      radial-gradient(1100px 520px at 75% -10%, rgba(0,255,65,.07), transparent 60%),
+      radial-gradient(800px 420px at -10% 30%, rgba(0,204,51,.045), transparent 60%),
+      var(--bg);
+    color:#d7e8d7;
+    -webkit-font-smoothing:antialiased;
+  }
+  ::selection{ background:rgba(0,255,65,.28); color:#04140a }
+  .font-display{ font-family:'Space Grotesk','Segoe UI',sans-serif }
+  .num{ font-family:'JetBrains Mono',ui-monospace,monospace; font-variant-numeric:tabular-nums }
+
+  /* ===================== BACKGROUND FX ===================== */
+  #matrixBg{ position:fixed; inset:0; z-index:0; opacity:.06; pointer-events:none }
+  .crt{
+    position:fixed; inset:0; z-index:30; pointer-events:none;
+    background:repeating-linear-gradient(0deg, rgba(0,255,65,.02) 0 1px, transparent 1px 3px);
+    mix-blend-mode:screen;
+  }
+
+  /* ===================== CARDS ===================== */
+  .card{
+    background:linear-gradient(160deg, rgba(13,31,13,.82), rgba(9,18,9,.94));
+    border:1px solid rgba(0,255,65,.13);
+    border-radius:1rem;
+    box-shadow:0 18px 40px -22px rgba(0,0,0,.9), inset 0 1px 0 rgba(255,255,255,.03), 0 0 26px -12px rgba(0,255,65,.16);
+    transition:border-color .25s ease, box-shadow .25s ease, transform .25s ease;
+  }
+  .card:hover{ border-color:rgba(0,255,65,.26); box-shadow:0 18px 44px -22px rgba(0,0,0,.95), inset 0 1px 0 rgba(255,255,255,.04), 0 0 34px -10px rgba(0,255,65,.28) }
+  .food-card:hover{ transform:translateY(-2px) }
+
+  /* Highlight pulse when the scanner prefills the form */
+  .flash{ animation:flashGlow 1.8s ease-out }
+  @keyframes flashGlow{
+    0%{ box-shadow:0 0 0 2px rgba(0,255,65,.85), 0 0 46px rgba(0,255,65,.45) }
+    100%{ box-shadow:0 18px 40px -22px rgba(0,0,0,.9), 0 0 26px -12px rgba(0,255,65,.16) }
+  }
+
+  /* ===================== TYPO HELPERS ===================== */
+  .overline{
+    font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.28em;
+    text-transform:uppercase; color:var(--green-2);
+  }
+
+  /* ===================== NAV TABS ===================== */
+  .tab-btn{
+    display:inline-flex; align-items:center; gap:.45rem; white-space:nowrap;
+    padding:.55rem .85rem; border-radius:.6rem; font-size:.82rem; font-weight:500;
+    color:var(--muted); border:1px solid transparent; cursor:pointer;
+    transition:color .2s, background .2s, border-color .2s, box-shadow .2s;
+  }
+  .tab-btn:hover{ color:var(--green); background:rgba(0,255,65,.06) }
+  .tab-btn.active{
+    color:var(--green); background:rgba(0,255,65,.09);
+    border-color:rgba(0,255,65,.25); box-shadow:0 0 16px -6px rgba(0,255,65,.5);
+  }
+
+  /* ===================== FORMS ===================== */
+  .lbl{ display:block; font-size:10px; text-transform:uppercase; letter-spacing:.16em; color:#6a8a6a; margin-bottom:.35rem; font-weight:600 }
+  .field{
+    width:100%; background:#0a140a; border:1px solid #1e3d24; border-radius:.6rem;
+    padding:.55rem .8rem; font-size:.875rem; color:var(--ink);
+    transition:border-color .2s, box-shadow .2s;
+  }
+  .field:focus{ outline:none; border-color:var(--green-2); box-shadow:0 0 0 3px rgba(0,255,65,.12), 0 0 14px -4px rgba(0,255,65,.4) }
+  .field::placeholder{ color:#42563f }
+  select.field{ cursor:pointer }
+  textarea.field{ resize:vertical }
+
+  /* ===================== BUTTONS ===================== */
+  .btn-primary{
+    display:inline-flex; align-items:center; justify-content:center; gap:.5rem;
+    background:linear-gradient(135deg,#00ff41,#00cc33); color:#03130a; font-weight:700;
+    font-size:.85rem; padding:.62rem 1.15rem; border-radius:.65rem; cursor:pointer;
+    box-shadow:0 0 20px -4px rgba(0,255,65,.55), inset 0 1px 0 rgba(255,255,255,.35);
+    transition:transform .15s, box-shadow .2s, filter .2s;
+  }
+  .btn-primary:hover{ filter:brightness(1.08); transform:translateY(-1px); box-shadow:0 0 28px -4px rgba(0,255,65,.75), inset 0 1px 0 rgba(255,255,255,.35) }
+  .btn-primary:active{ transform:scale(.97) }
+  .btn-primary:disabled{ opacity:.5; cursor:not-allowed; transform:none }
+  .btn-ghost{
+    display:inline-flex; align-items:center; justify-content:center; gap:.5rem;
+    border:1px solid rgba(0,255,65,.25); color:var(--green); background:rgba(0,255,65,.03);
+    font-size:.82rem; font-weight:600; padding:.58rem 1rem; border-radius:.65rem; cursor:pointer;
+    transition:background .2s, border-color .2s, box-shadow .2s;
+  }
+  .btn-ghost:hover{ background:rgba(0,255,65,.1); border-color:rgba(0,255,65,.45); box-shadow:0 0 16px -6px rgba(0,255,65,.5) }
+  .btn-danger{
+    display:inline-flex; align-items:center; justify-content:center; gap:.5rem;
+    border:1px solid rgba(255,92,92,.35); color:#ff7070; background:rgba(255,60,60,.05);
+    font-size:.82rem; font-weight:600; padding:.58rem 1rem; border-radius:.65rem; cursor:pointer;
+    transition:background .2s, border-color .2s;
+  }
+  .btn-danger:hover{ background:rgba(255,60,60,.13); border-color:rgba(255,92,92,.6) }
+  .icon-btn{
+    padding:.4rem; border-radius:.5rem; color:var(--faint); cursor:pointer;
+    transition:color .2s, background .2s, box-shadow .2s;
+  }
+  .icon-btn:hover{ color:var(--green); background:rgba(0,255,65,.09); box-shadow:0 0 12px -4px rgba(0,255,65,.5) }
+  .icon-btn.danger:hover{ color:#ff7070; background:rgba(255,60,60,.1); box-shadow:0 0 12px -4px rgba(255,60,60,.4) }
+
+  /* ===================== PROGRESS ===================== */
+  .track{ height:.55rem; border-radius:999px; background:rgba(0,255,65,.07); border:1px solid rgba(0,255,65,.09); overflow:hidden }
+  .fill{
+    height:100%; border-radius:999px;
+    background:linear-gradient(90deg,#00a52a,#00ff41);
+    box-shadow:0 0 12px rgba(0,255,65,.55);
+    transition:width .9s cubic-bezier(.22,1,.36,1);
+  }
+  .fill.over{ background:linear-gradient(90deg,#b81f1f,#ff4d4d); box-shadow:0 0 12px rgba(255,60,60,.55) }
+
+  /* ===================== CHIPS & PILLS ===================== */
+  .chip{
+    font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.05em;
+    border:1px solid rgba(0,255,65,.2); border-radius:.45rem; padding:.2rem .5rem;
+    color:#8fce8f; background:rgba(0,255,65,.05); white-space:nowrap;
+  }
+  .pill{
+    font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:.04em;
+    padding:.32rem .65rem; border-radius:999px; border:1px solid;
+    display:inline-flex; align-items:center; gap:.35rem; white-space:nowrap;
+  }
+  .pill-ok{ color:var(--green); border-color:rgba(0,255,65,.35); background:rgba(0,255,65,.08) }
+  .pill-warn{ color:#ffd60a; border-color:rgba(255,214,10,.3); background:rgba(255,214,10,.07) }
+  .pill-bad{ color:#ff6b6b; border-color:rgba(255,92,92,.32); background:rgba(255,92,92,.08) }
+  .pill-mute{ color:#6a8a6a; border-color:rgba(106,138,106,.3); background:rgba(106,138,106,.07) }
+
+  /* ===================== PAGES ===================== */
+  .page{ display:none }
+  .page.active{ display:block; animation:fadeUp .45s cubic-bezier(.22,1,.36,1) both }
+  @keyframes fadeUp{ from{opacity:0; transform:translateY(14px)} to{opacity:1; transform:none} }
+
+  /* ===================== COMBO (food picker) ===================== */
+  .combo{ position:relative }
+  .combo-list{
+    position:absolute; left:0; right:0; top:100%; margin-top:.4rem; z-index:40;
+    max-height:15rem; overflow-y:auto; border-radius:.7rem;
+    background:#0b1a0b; border:1px solid rgba(0,255,65,.22);
+    box-shadow:0 22px 44px -14px rgba(0,0,0,.9), 0 0 22px -8px rgba(0,255,65,.3);
+  }
+  .combo-item{
+    display:flex; align-items:center; justify-content:space-between; gap:.5rem;
+    width:100%; text-align:left; padding:.6rem .8rem; font-size:.85rem; color:var(--ink);
+    border-bottom:1px solid rgba(0,255,65,.06); cursor:pointer; transition:background .15s;
+  }
+  .combo-item:last-child{ border-bottom:0 }
+  .combo-item:hover{ background:rgba(0,255,65,.1) }
+
+  /* ===================== PREVIEW BOX ===================== */
+  .preview{
+    border:1px dashed rgba(0,255,65,.18); border-radius:.7rem;
+    background:rgba(0,0,0,.28); padding:.7rem .9rem; font-size:.8rem; color:var(--muted);
+  }
+
+  /* ===================== WEEK DAY STRIP ===================== */
+  .daycell{
+    display:flex; flex-direction:column; align-items:center; gap:.3rem;
+    padding:.65rem .2rem; border-radius:.8rem; cursor:pointer;
+    border:1px solid rgba(0,255,65,.1); background:rgba(0,0,0,.25);
+    transition:border-color .2s, background .2s, box-shadow .2s, transform .2s;
+  }
+  .daycell:hover{ border-color:rgba(0,255,65,.4); background:rgba(0,255,65,.05); transform:translateY(-2px) }
+  .daycell.today{
+    border-color:rgba(0,255,65,.6); background:rgba(0,255,65,.08);
+    box-shadow:0 0 16px -4px rgba(0,255,65,.5);
+  }
+  .daycell.selected{ border-color:rgba(0,255,65,.45); background:rgba(0,255,65,.06) }
+  .daycell.future{ opacity:.4 }
+
+  /* ===================== PLAN CARDS ===================== */
+  .plan-card{
+    display:block; cursor:pointer; border:1px solid rgba(0,255,65,.12);
+    border-radius:.85rem; padding:1rem; background:rgba(0,255,65,.025);
+    transition:border-color .2s, background .2s, box-shadow .2s, transform .2s;
+  }
+  .plan-card:hover{ border-color:rgba(0,255,65,.35); transform:translateY(-2px) }
+  .plan-card.selected{
+    border-color:var(--green); background:rgba(0,255,65,.08);
+    box-shadow:0 0 22px -6px rgba(0,255,65,.45), inset 0 0 0 1px rgba(0,255,65,.35);
+  }
+  .plan-icon{
+    display:inline-flex; padding:.45rem; border-radius:.6rem; color:var(--green);
+    background:rgba(0,255,65,.08); border:1px solid rgba(0,255,65,.18);
+  }
+
+  /* ===================== ENTRIES ===================== */
+  .entry{ display:flex; align-items:center; gap:1rem; padding:.85rem 0; border-bottom:1px solid rgba(0,255,65,.07) }
+  .entry:last-child{ border-bottom:0 }
+
+  /* ===================== TABLES ===================== */
+  .htable th{
+    font-size:10px; text-transform:uppercase; letter-spacing:.16em; color:#5a705a;
+    font-weight:600; text-align:left; padding-bottom:.6rem;
+  }
+  .htable td{ border-top:1px solid rgba(0,255,65,.07) }
+  .htable tr:last-child td{ border-bottom:1px solid rgba(0,255,65,.07) }
+
+  /* ===================== TOASTS ===================== */
+  #toasts{ position:fixed; bottom:1.25rem; right:1.25rem; z-index:60; display:flex; flex-direction:column; gap:.55rem; align-items:flex-end }
+  .toast{
+    display:flex; align-items:center; gap:.6rem; max-width:22rem;
+    background:linear-gradient(160deg,#0e220e,#0a150a); color:var(--ink);
+    border:1px solid rgba(0,255,65,.35); border-radius:.75rem; padding:.7rem 1rem; font-size:.82rem;
+    box-shadow:0 16px 34px -12px rgba(0,0,0,.9), 0 0 22px -8px rgba(0,255,65,.5);
+    opacity:0; transform:translateY(14px); transition:opacity .3s, transform .35s cubic-bezier(.22,1,.36,1);
+  }
+  .toast.show{ opacity:1; transform:none }
+  .toast-error{ border-color:rgba(255,92,92,.45) }
+
+  /* ===================== SCROLLBARS ===================== */
+  ::-webkit-scrollbar{ width:9px; height:9px }
+  ::-webkit-scrollbar-track{ background:#0a0f0a }
+  ::-webkit-scrollbar-thumb{ background:rgba(0,255,65,.22); border-radius:99px; border:2px solid #0a0f0a }
+  ::-webkit-scrollbar-thumb:hover{ background:rgba(0,255,65,.4) }
+
+  .lucide{ stroke-width:1.9 }
+</style>
+</head>
+
+<body class="min-h-screen">
+
+<!-- Ambient background layers -->
+<canvas id="matrixBg" aria-hidden="true"></canvas>
+<div class="crt" aria-hidden="true"></div>
+
+<div class="relative z-10 min-h-screen flex flex-col">
+
+  <!-- ================= NAVBAR ================= -->
+  <header class="fixed top-0 inset-x-0 z-40 border-b border-[rgba(0,255,65,.12)] bg-[rgba(8,12,8,.82)] backdrop-blur-md">
+    <div class="max-w-6xl mx-auto px-4">
+      <div class="flex items-center justify-between gap-4 h-14">
+        <a href="#" onclick="return false" class="flex items-center gap-2.5 shrink-0">
+          <span class="w-8 h-8 rounded-lg bg-[rgba(0,255,65,.1)] border border-[rgba(0,255,65,.3)] flex items-center justify-center shadow-[0_0_16px_-4px_rgba(0,255,65,.7)]">
+            <i data-lucide="zap" class="w-4 h-4 text-[#00ff41]"></i>
+          </span>
+          <span class="font-display font-bold tracking-tight text-white">KJ<span class="text-[#00ff41]">//</span>TRACK</span>
+        </a>
+        <nav class="flex items-center gap-1 overflow-x-auto" aria-label="Main navigation">
+          <button class="tab-btn" data-tab="dashboard"><i data-lucide="layout-dashboard" class="w-4 h-4"></i>Dashboard</button>
+          <button class="tab-btn" data-tab="log"><i data-lucide="notebook-pen" class="w-4 h-4"></i>Food Log</button>
+          <button class="tab-btn" data-tab="foods"><i data-lucide="apple" class="w-4 h-4"></i>My Foods</button>
+          <button class="tab-btn" data-tab="history"><i data-lucide="calendar-range" class="w-4 h-4"></i>Weeks</button>
+          <button class="tab-btn" data-tab="profile"><i data-lucide="user-round" class="w-4 h-4"></i>Profile</button>
+          <button class="tab-btn" data-tab="settings"><i data-lucide="settings" class="w-4 h-4"></i>Settings</button>
+        </nav>
+      </div>
+    </div>
+  </header>
+
+  <!-- ================= MAIN ================= -->
+  <main class="flex-1 w-full max-w-6xl mx-auto px-4 pt-[4.75rem] md:pt-20 pb-10">
+
+    <!-- ============ PAGE: DASHBOARD (weekly) ============ -->
+    <section id="page-dashboard" class="page">
+
+      <!-- First-run banner -->
+      <div id="profileBanner" class="card hidden p-5 mb-4 md:mb-5">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div class="flex items-center gap-3">
+            <span class="plan-icon"><i data-lucide="user-round" class="w-4 h-4"></i></span>
+            <div>
+              <p class="font-medium text-sm text-[#e8f5e9]">Welcome to KJ//TRACK</p>
+              <p class="text-xs text-[#7da87d] mt-0.5">Set up your profile and choose a goal to unlock your weekly kilojoule &amp; macro budget.</p>
+            </div>
+          </div>
+          <button class="btn-primary" data-tablink="profile">Set up profile<i data-lucide="chevron-right" class="w-4 h-4"></i></button>
+        </div>
+      </div>
+
+      <!-- Greeting bar -->
+      <div class="card p-5 mb-4 md:mb-5 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p class="overline">// system.online</p>
+          <h2 class="font-display text-xl md:text-2xl font-semibold mt-1 text-white"><span id="greetText"></span><span id="greetName" class="text-[#00ff41]"></span></h2>
+          <p id="todayLabel" class="text-sm text-[#7da87d] mt-1"></p>
+        </div>
+        <div class="flex items-center gap-2 flex-wrap">
+          <span id="planChip" class="pill pill-ok">—</span>
+          <button class="btn-ghost" data-tablink="profile"><i data-lucide="target" class="w-4 h-4"></i>Edit goals</button>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-5">
+
+        <!-- Weekly energy ring gauge -->
+        <div class="card p-6 flex flex-col items-center justify-center">
+          <div class="flex items-center justify-between w-full">
+            <p class="overline">// energy.week</p>
+            <span class="chip">Mon–Sun</span>
+          </div>
+          <div class="relative mt-3">
+            <svg width="230" height="230" viewBox="0 0 240 240" class="block">
+              <defs>
+                <linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stop-color="#00cc33"/><stop offset="100%" stop-color="#00ff41"/>
+                </linearGradient>
+              </defs>
+              <circle cx="120" cy="120" r="94" fill="none" stroke="rgba(0,255,65,.08)" stroke-width="15"/>
+              <circle id="ringFill" cx="120" cy="120" r="94" fill="none" stroke="url(#ringGrad)"
+                      stroke-width="15" stroke-linecap="round" stroke-dasharray="590.62" stroke-dashoffset="590.62"
+                      transform="rotate(-90 120 120)"
+                      style="transition:stroke-dashoffset 1s cubic-bezier(.22,1,.36,1), stroke .3s; filter:drop-shadow(0 0 10px rgba(0,255,65,.45));"/>
+            </svg>
+            <div class="absolute inset-0 flex flex-col items-center justify-center text-center px-8">
+              <span id="ringRemain" class="num text-4xl leading-none font-bold text-white">—</span>
+              <span id="ringRemainLabel" class="mt-1.5 text-[10px] uppercase tracking-[0.22em] text-[#6a8a6a]">kJ left this week</span>
+              <span id="ringSub" class="mt-2.5 num text-xs text-[#7da87d]"></span>
+            </div>
+          </div>
+          <span id="ringPct" class="chip mt-5"></span>
+        </div>
+
+        <!-- Weekly macro targets -->
+        <div class="card p-5 md:p-6 lg:col-span-2">
+          <div class="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <p class="overline">// macros.week</p>
+              <h3 class="font-display text-lg font-semibold text-white mt-1">Weekly budget</h3>
+            </div>
+            <span id="dashTargetKj" class="num text-xs text-[#7da87d]">—</span>
+          </div>
+          <div id="dashMacros" class="mt-5"></div>
+          <div class="mt-5 pt-4 border-t border-[rgba(0,255,65,.08)]">
+            <div class="flex items-center justify-between flex-wrap gap-2">
+              <span class="text-xs uppercase tracking-[0.14em] text-[#5a705a] font-semibold">Weekly energy mix</span>
+              <div id="energyLegend" class="flex items-center gap-3 text-[11px] num text-[#7da87d]"></div>
+            </div>
+            <div id="energySplit" class="mt-2.5"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Week day strip -->
+      <div class="card p-4 md:p-5 mt-4 md:mt-5">
+        <div class="flex items-center justify-between gap-3 flex-wrap mb-3">
+          <p class="overline">// week.days</p>
+          <span class="text-[11px] text-[#5a705a]">tap a day to open it in the log</span>
+        </div>
+        <div id="dashWeekStrip" class="grid grid-cols-7 gap-1.5 md:gap-2.5"></div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-5 mt-4 md:mt-5">
+
+        <!-- Quick add -->
+        <div class="card p-5 md:p-6 lg:col-span-2">
+          <div class="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <p class="overline">// quick.log</p>
+              <h3 class="font-display text-lg font-semibold text-white mt-1">Quick add</h3>
+            </div>
+            <span class="text-xs text-[#5a705a] num">logs to today</span>
+          </div>
+          <div class="mt-4 grid sm:grid-cols-[1fr_120px_auto] gap-2">
+            <div id="quickCombo" class="combo" data-food-id="">
+              <input type="text" data-role="combo-input" class="field" placeholder="Search your foods..." autocomplete="off" aria-label="Search foods">
+              <div class="combo-list hidden"></div>
+            </div>
+            <input id="quickQty" type="number" min="0" step="any" value="1" class="field num" inputmode="decimal" aria-label="Servings">
+            <button id="quickAddBtn" class="btn-primary"><i data-lucide="plus" class="w-4 h-4"></i>Add</button>
+          </div>
+          <p class="mt-1.5 text-[11px] text-[#5a705a]">Amount is in <span class="text-[#8fce8f]">servings</span>. For grams, or to log to another day, use the Food Log page.</p>
+          <div id="quickPreview" class="preview mt-3"></div>
+        </div>
+
+        <!-- Week snapshot -->
+        <div class="card p-5 md:p-6">
+          <div class="flex items-center justify-between gap-3">
+            <div>
+              <p class="overline">// week.snapshot</p>
+              <h3 class="font-display text-lg font-semibold text-white mt-1">This week</h3>
+            </div>
+            <span id="snapChip" class="pill pill-mute">—</span>
+          </div>
+          <div class="mt-4 grid grid-cols-3 gap-2 text-center">
+            <div class="rounded-xl border border-[rgba(0,255,65,.1)] bg-[rgba(0,0,0,.25)] p-3">
+              <div id="snapDays" class="num text-xl font-bold text-[#00ff41]">0<span class="text-xs text-[#5a705a]">/7</span></div>
+              <div class="text-[9px] uppercase tracking-widest text-[#5a705a] mt-1">Days logged</div>
+            </div>
+            <div class="rounded-xl border border-[rgba(0,255,65,.1)] bg-[rgba(0,0,0,.25)] p-3">
+              <div id="snapAvg" class="num text-xl font-bold text-[#00ff41]">0</div>
+              <div class="text-[9px] uppercase tracking-widest text-[#5a705a] mt-1">Avg kJ / day</div>
+            </div>
+            <div class="rounded-xl border border-[rgba(0,255,65,.1)] bg-[rgba(0,0,0,.25)] p-3">
+              <div id="snapProj" class="num text-xl font-bold text-[#00ff41]">0</div>
+              <div class="text-[9px] uppercase tracking-widest text-[#5a705a] mt-1">Projected wk</div>
+            </div>
+          </div>
+          <p id="snapNote" class="mt-3 text-xs leading-relaxed text-[#7da87d]"></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ PAGE: FOOD LOG ============ -->
+    <section id="page-log" class="page">
+      <div class="mb-4 md:mb-5 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p class="overline">// diary.weekly</p>
+          <h2 class="font-display text-2xl md:text-3xl font-semibold text-white mt-1">Food Log</h2>
+        </div>
+        <div class="flex items-center gap-1.5 flex-wrap">
+          <button id="prevDay" class="btn-ghost px-2.5!" aria-label="Previous day"><i data-lucide="chevron-left" class="w-4 h-4"></i></button>
+          <input type="date" id="logDate" class="field w-auto! num text-sm" aria-label="Log date">
+          <button id="nextDay" class="btn-ghost px-2.5!" aria-label="Next day"><i data-lucide="chevron-right" class="w-4 h-4"></i></button>
+          <button id="todayBtn" class="btn-ghost">Today</button>
+        </div>
+      </div>
+
+      <!-- Week selector strip -->
+      <div class="card p-3 md:p-4 mb-4 md:mb-5">
+        <div id="logWeekStrip" class="grid grid-cols-7 gap-1.5 md:gap-2"></div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-5 gap-4 md:gap-5">
+
+        <!-- Entries -->
+        <div class="lg:col-span-3 order-2 lg:order-1">
+          <div class="card p-5 md:p-6">
+            <div class="flex items-center justify-between gap-3 flex-wrap">
+              <h3 id="logHeadline" class="font-display text-lg font-semibold text-white">Entries</h3>
+              <span id="logCount" class="chip">0 items</span>
+            </div>
+            <div id="entriesList" class="mt-1"></div>
+            <div id="logTotals"></div>
+          </div>
+        </div>
+
+        <!-- Add entry + progress -->
+        <div class="lg:col-span-2 order-1 lg:order-2 space-y-4 md:space-y-5">
+          <div class="card p-5 md:p-6">
+            <p class="overline">// log.entry</p>
+            <h3 class="font-display text-lg font-semibold text-white mt-1">Add food</h3>
+            <div class="mt-4">
+              <label class="lbl" for="logComboInput">Food</label>
+              <div id="logCombo" class="combo" data-food-id="">
+                <input id="logComboInput" type="text" data-role="combo-input" class="field" placeholder="Search your foods..." autocomplete="off">
+                <div class="combo-list hidden"></div>
+              </div>
+            </div>
+            <div class="grid grid-cols-[1fr_128px] gap-2 mt-3">
+              <div>
+                <label class="lbl" for="logQty">Amount</label>
+                <input id="logQty" type="number" min="0" step="any" class="field num" inputmode="decimal" placeholder="1">
+              </div>
+              <div>
+                <label class="lbl" for="logUnit">Unit</label>
+                <select id="logUnit" class="field">
+                  <option value="srv">servings</option>
+                  <option value="g">g / ml</option>
+                </select>
+              </div>
+            </div>
+            <div id="logPreview" class="preview mt-3"></div>
+            <button id="logAddBtn" class="btn-primary w-full mt-3"><i data-lucide="plus" class="w-4 h-4"></i>Add to log</button>
+          </div>
+
+          <div class="card p-5 md:p-6">
+            <div class="flex items-center justify-between gap-2 flex-wrap">
+              <p class="overline">// day.progress</p>
+              <div class="flex items-center gap-2">
+                <span id="logWeekChip" class="chip"></span>
+                <span id="logKjSummary" class="num text-xs text-[#7da87d]"></span>
+              </div>
+            </div>
+            <div id="logMacroBars" class="mt-4"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ PAGE: MY FOODS ============ -->
+    <section id="page-foods" class="page">
+      <div class="mb-4 md:mb-5">
+        <p class="overline">// database.foods</p>
+        <h2 class="font-display text-2xl md:text-3xl font-semibold text-white mt-1">My Foods</h2>
+        <p class="text-sm text-[#7da87d] mt-1">Scan a nutrition label or paste the text — then review, fix anything, and save.</p>
+      </div>
+
+      <!-- Label scanner / paste -->
+      <div class="card p-5 md:p-6 mb-4 md:mb-5">
+        <div class="flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <p class="overline">// intake.auto</p>
+            <h3 class="font-display text-lg font-semibold text-white mt-1">Auto-import from a label</h3>
+          </div>
+          <span class="chip">on-device OCR · no uploads</span>
+        </div>
+
+        <div class="mt-4 grid lg:grid-cols-2 gap-4 md:gap-5">
+          <!-- Photo OCR -->
+          <div>
+            <label class="lbl">1 · Photograph the label</label>
+            <div class="flex flex-wrap gap-2">
+              <label class="btn-ghost cursor-pointer flex-1 sm:flex-none">
+                <i data-lucide="camera" class="w-4 h-4"></i>Take photo
+                <input id="camFile" type="file" accept="image/*" capture="environment" class="hidden">
+              </label>
+              <label class="btn-ghost cursor-pointer flex-1 sm:flex-none">
+                <i data-lucide="image" class="w-4 h-4"></i>Upload image
+                <input id="scanFile" type="file" accept="image/*" class="hidden">
+              </label>
+            </div>
+            <img id="scanThumb" alt="Label preview" class="hidden mt-3 h-24 rounded-lg border border-[rgba(0,255,65,.2)] object-cover">
+            <div id="ocrWrap" class="hidden mt-3">
+              <div class="track"><div id="ocrFill" class="fill" style="width:0%"></div></div>
+              <p id="ocrStatus" class="mt-1.5 text-[11px] num text-[#7da87d]">Preparing…</p>
+            </div>
+            <p class="mt-3 text-[11px] leading-relaxed text-[#5a705a]">
+              Tip: fill the frame with the label, keep it flat and well-lit. The recognized text lands in the box on the right so you can correct it.
+            </p>
+          </div>
+
+          <!-- Paste text -->
+          <div>
+            <label class="lbl" for="labelText">2 · Paste or edit the label text</label>
+            <textarea id="labelText" rows="5" spellcheck="false" class="field num text-xs! leading-relaxed" placeholder="e.g.
+Serving size: 30g
+Energy 502kJ   Protein 24g
+Carbohydrate 3g   Fat 1.5g
+Sugars 2g   Dietary fibre 1g"></textarea>
+            <div class="mt-2 flex gap-2">
+              <button id="parseBtn" class="btn-primary flex-1"><i data-lucide="sparkles" class="w-4 h-4"></i>Parse &amp; autofill</button>
+              <button id="clearLabelBtn" class="btn-ghost" title="Clear text"><i data-lucide="x" class="w-4 h-4"></i></button>
+            </div>
+          </div>
+        </div>
+
+        <p class="mt-4 pt-3 border-t border-[rgba(0,255,65,.08)] text-[11px] leading-relaxed text-[#5a705a]">
+          Detects kJ (or kcal converted to kJ), protein, carbs, fat, fibre, sugars and serving size — including two-column "per serving / per 100 g" labels.
+          The form below gets prefilled — <span class="text-[#8fce8f]">always give the values a quick sanity check</span> before saving.
+        </p>
+      </div>
+
+      <!-- Add / edit form -->
+      <div id="foodFormCard" class="card p-5 md:p-6 mb-4 md:mb-5">
+        <div class="flex items-center justify-between gap-3">
+          <div>
+            <p class="overline">// database.register</p>
+            <h3 id="foodFormTitle" class="font-display text-lg font-semibold text-white mt-1">Register a food</h3>
+          </div>
+          <span class="chip hidden sm:inline-block">values per serving</span>
+        </div>
+        <form id="foodForm" class="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3" autocomplete="off">
+          <div class="col-span-2">
+            <label class="lbl" for="fName">Food name</label>
+            <input id="fName" type="text" class="field" placeholder="e.g. Chicken Breast" required>
+          </div>
+          <div>
+            <label class="lbl" for="fServing">Serving (g / ml)</label>
+            <input id="fServing" type="number" min="1" step="any" class="field num" value="100" inputmode="decimal" required>
+          </div>
+          <div>
+            <label class="lbl" for="fCat">Category</label>
+            <select id="fCat" class="field"></select>
+          </div>
+          <div>
+            <label class="lbl" for="fKj">Kilojoules</label>
+            <input id="fKj" type="number" min="0" step="any" class="field num" placeholder="0" inputmode="decimal" required>
+          </div>
+          <div>
+            <label class="lbl" for="fP">Protein (g)</label>
+            <input id="fP" type="number" min="0" step="any" class="field num" placeholder="0" inputmode="decimal">
+          </div>
+          <div>
+            <label class="lbl" for="fC">Carbs (g)</label>
+            <input id="fC" type="number" min="0" step="any" class="field num" placeholder="0" inputmode="decimal">
+          </div>
+          <div>
+            <label class="lbl" for="fF">Fat (g)</label>
+            <input id="fF" type="number" min="0" step="any" class="field num" placeholder="0" inputmode="decimal">
+          </div>
+          <div>
+            <label class="lbl" for="fFb">Fiber (g)</label>
+            <input id="fFb" type="number" min="0" step="any" class="field num" placeholder="0" inputmode="decimal">
+          </div>
+          <div>
+            <label class="lbl" for="fSugar">Sugar (g) — optional</label>
+            <input id="fSugar" type="number" min="0" step="any" class="field num" placeholder="0" inputmode="decimal">
+          </div>
+          <div class="col-span-2 flex items-end gap-2">
+            <button type="submit" id="foodSubmitBtn" class="btn-primary flex-1"><i data-lucide="plus" class="w-4 h-4"></i><span>Add food</span></button>
+            <button type="button" id="cancelEditBtn" class="btn-ghost hidden"><i data-lucide="x" class="w-4 h-4"></i>Cancel</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Toolbar -->
+      <div class="flex flex-wrap items-center gap-2 mb-4">
+        <div class="relative flex-1 min-w-[190px]">
+          <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#5a705a] pointer-events-none"></i>
+          <input id="foodSearch" type="text" class="field pl-9!" placeholder="Search foods..." autocomplete="off" aria-label="Search foods">
+        </div>
+        <select id="foodCatFilter" class="field w-auto!" aria-label="Filter by category"></select>
+        <span id="foodCount" class="chip"></span>
+      </div>
+
+      <div id="foodsGrid" class="grid sm:grid-cols-2 xl:grid-cols-3 gap-3 md:gap-4"></div>
+    </section>
+
+    <!-- ============ PAGE: WEEKS (history) ============ -->
+    <section id="page-history" class="page">
+      <div class="mb-4 md:mb-5">
+        <p class="overline">// archive.weekly</p>
+        <h2 class="font-display text-2xl md:text-3xl font-semibold text-white mt-1">Weekly history</h2>
+        <p class="text-sm text-[#7da87d] mt-1">Each week against its 7-day budget — click a week to open it in the log.</p>
+      </div>
+
+      <div class="card p-5 md:p-6 mb-4 md:mb-5">
+        <div class="flex items-center justify-between gap-3 flex-wrap">
+          <p class="overline">// kj.weeks</p>
+          <span class="num text-xs text-[#7da87d]" id="histNote"></span>
+        </div>
+        <div id="weekChart" class="mt-4 h-32 flex items-end gap-1.5 md:gap-2.5"></div>
+      </div>
+
+      <div class="card p-5 md:p-6">
+        <div class="overflow-x-auto">
+          <table class="htable w-full min-w-[560px]">
+            <thead>
+              <tr>
+                <th>Week</th>
+                <th>Total kJ</th>
+                <th class="hidden sm:table-cell">Avg / day</th>
+                <th class="hidden sm:table-cell">Days</th>
+                <th class="hidden md:table-cell">Protein</th>
+                <th class="hidden md:table-cell">Carbs</th>
+                <th class="hidden md:table-cell">Fat</th>
+                <th class="text-right">Status</th>
+              </tr>
+            </thead>
+            <tbody id="weekBody"></tbody>
+          </table>
+        </div>
+        <p id="weekAvg" class="mt-4 text-xs text-[#7da87d] num"></p>
+      </div>
+    </section>
+
+    <!-- ============ PAGE: PROFILE / GOALS ============ -->
+    <section id="page-profile" class="page">
+      <div class="mb-4 md:mb-5">
+        <p class="overline">// config.identity</p>
+        <h2 class="font-display text-2xl md:text-3xl font-semibold text-white mt-1">Profile &amp; Goals</h2>
+        <p class="text-sm text-[#7da87d] mt-1">Your stats power the Mifflin-St Jeor equation — every change recalculates instantly and saves automatically.</p>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-5 mb-4 md:mb-5">
+
+        <!-- Stats form -->
+        <div class="card p-5 md:p-6 lg:col-span-2">
+          <p class="overline">// body.metrics</p>
+          <h3 class="font-display text-lg font-semibold text-white mt-1 mb-4">Your stats</h3>
+          <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+            <div class="col-span-2 md:col-span-1">
+              <label class="lbl" for="pName">Name</label>
+              <input id="pName" type="text" class="field profile-field" placeholder="Your name" autocomplete="off">
+            </div>
+            <div>
+              <label class="lbl" for="pAge">Age</label>
+              <input id="pAge" type="number" min="5" max="120" step="1" class="field num profile-field" inputmode="numeric" placeholder="30">
+            </div>
+            <div>
+              <label class="lbl" for="pGender">Gender</label>
+              <select id="pGender" class="field profile-field">
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <div>
+              <label class="lbl" for="pHeight">Height (cm)</label>
+              <input id="pHeight" type="number" min="50" max="260" step="any" class="field num profile-field" inputmode="decimal" placeholder="178">
+            </div>
+            <div>
+              <label class="lbl" for="pWeight">Weight (kg)</label>
+              <input id="pWeight" type="number" min="20" max="500" step="any" class="field num profile-field" inputmode="decimal" placeholder="80">
+            </div>
+            <div>
+              <label class="lbl" for="pGoalWeight">Goal weight (kg)</label>
+              <input id="pGoalWeight" type="number" min="20" max="500" step="any" class="field num profile-field" inputmode="decimal" placeholder="75">
+            </div>
+            <div class="col-span-2 md:col-span-3">
+              <label class="lbl" for="pActivity">Activity level</label>
+              <select id="pActivity" class="field profile-field">
+                <option value="sedentary">Sedentary — desk job, little exercise</option>
+                <option value="light">Lightly Active — 1–3 workouts / week</option>
+                <option value="moderate" selected>Moderately Active — 3–5 workouts / week</option>
+                <option value="very">Very Active — 6–7 workouts / week</option>
+                <option value="extreme">Extremely Active — athlete / physical job</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Live results -->
+        <div class="card p-5 md:p-6">
+          <p class="overline">// calc.output</p>
+          <h3 class="font-display text-lg font-semibold text-white mt-1">Your numbers</h3>
+          <div id="profileResults" class="mt-4"></div>
+          <div id="goalProjection" class="mt-4"></div>
+        </div>
+      </div>
+
+      <!-- Diet plans -->
+      <div class="card p-5 md:p-6">
+        <div class="flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <p class="overline">// protocol.select</p>
+            <h3 class="font-display text-lg font-semibold text-white mt-1">Choose your diet protocol</h3>
+          </div>
+          <span class="chip">Mifflin-St Jeor · weekly = daily × 7</span>
+        </div>
+        <div id="planGrid" class="mt-4 grid sm:grid-cols-2 xl:grid-cols-3 gap-3"></div>
+      </div>
+    </section>
+
+    <!-- ============ PAGE: SETTINGS ============ -->
+    <section id="page-settings" class="page">
+      <div class="mb-4 md:mb-5">
+        <p class="overline">// system.config</p>
+        <h2 class="font-display text-2xl md:text-3xl font-semibold text-white mt-1">Settings</h2>
+        <p class="text-sm text-[#7da87d] mt-1">Your data lives in this browser's localStorage — export backups regularly.</p>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-5">
+        <!-- Data management -->
+        <div class="card p-5 md:p-6">
+          <p class="overline">// data.port</p>
+          <h3 class="font-display text-lg font-semibold text-white mt-1">Data management</h3>
+          <div class="mt-4 space-y-2.5">
+            <button id="exportBtn" class="btn-ghost w-full justify-start!"><i data-lucide="download" class="w-4 h-4"></i>Export all data as JSON</button>
+            <label class="btn-ghost w-full justify-start! cursor-pointer">
+              <i data-lucide="upload" class="w-4 h-4"></i>Import data from JSON
+              <input id="importFile" type="file" accept=".json,application/json" class="hidden">
+            </label>
+            <button id="clearBtn" class="btn-danger w-full justify-start!"><i data-lucide="trash-2" class="w-4 h-4"></i>Clear all data</button>
+          </div>
+          <p class="mt-4 text-xs leading-relaxed text-[#5a705a]">
+            Export includes your profile, selected plan, full food database and every logged week.
+            Importing replaces current data after confirmation.
+          </p>
+        </div>
+
+        <!-- Storage stats -->
+        <div class="card p-5 md:p-6">
+          <p class="overline">// storage.stats</p>
+          <h3 class="font-display text-lg font-semibold text-white mt-1">Local storage</h3>
+          <div class="mt-4 grid grid-cols-4 gap-2 text-center">
+            <div class="rounded-xl border border-[rgba(0,255,65,.1)] bg-[rgba(0,0,0,.25)] p-3">
+              <div id="statFoods" class="num text-xl font-bold text-[#00ff41]">0</div>
+              <div class="text-[9px] uppercase tracking-widest text-[#5a705a] mt-1">Foods</div>
+            </div>
+            <div class="rounded-xl border border-[rgba(0,255,65,.1)] bg-[rgba(0,0,0,.25)] p-3">
+              <div id="statEntries" class="num text-xl font-bold text-[#00ff41]">0</div>
+              <div class="text-[9px] uppercase tracking-widest text-[#5a705a] mt-1">Entries</div>
+            </div>
+            <div class="rounded-xl border border-[rgba(0,255,65,.1)] bg-[rgba(0,0,0,.25)] p-3">
+              <div id="statDays" class="num text-xl font-bold text-[#00ff41]">0</div>
+              <div class="text-[9px] uppercase tracking-widest text-[#5a705a] mt-1">Days</div>
+            </div>
+            <div class="rounded-xl border border-[rgba(0,255,65,.1)] bg-[rgba(0,0,0,.25)] p-3">
+              <div id="statSize" class="num text-xl font-bold text-[#00ff41]">0</div>
+              <div class="text-[9px] uppercase tracking-widest text-[#5a705a] mt-1">Size</div>
+            </div>
+          </div>
+
+          <div class="mt-5 rounded-xl border border-[rgba(0,255,65,.1)] bg-[rgba(0,0,0,.25)] p-4 text-xs leading-relaxed text-[#7da87d] space-y-2">
+            <p class="flex items-start gap-2"><i data-lucide="info" class="w-3.5 h-3.5 mt-0.5 text-[#00cc33] shrink-0"></i><span>Energy is tracked in <span class="text-[#e8f5e9]">kilojoules</span> everywhere. 1 kcal = 4.184 kJ. Weekly budget = daily target × 7.</span></p>
+            <p class="flex items-start gap-2"><i data-lucide="shield" class="w-3.5 h-3.5 mt-0.5 text-[#00cc33] shrink-0"></i><span>Nothing leaves your device — label photos are read by on-device OCR only. Clearing browser data will erase the app data.</span></p>
+            <p class="flex items-start gap-2"><i data-lucide="wifi-off" class="w-3.5 h-3.5 mt-0.5 text-[#00cc33] shrink-0"></i><span>Works offline once loaded (OCR needs its engine cached from a first online scan). Host it free on GitHub Pages as a single index.html.</span></p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ================= FOOTER ================= -->
+  <footer class="border-t border-[rgba(0,255,65,.08)] py-5 text-center">
+    <p class="text-[11px] num text-[#4a5d4a]">Personal Macro Tracker v2.0 · all data stays on this device · 1 kcal = 4.184 kJ</p>
+  </footer>
+</div>
+
+<!-- Toasts -->
+<div id="toasts" aria-live="polite"></div>
+
+<!-- Confirm modal -->
+<div id="modalRoot" class="fixed inset-0 z-50 hidden items-center justify-center p-4">
+  <div class="absolute inset-0 bg-black/75 backdrop-blur-sm" data-close></div>
+  <div class="card relative w-full max-w-sm p-6" role="dialog" aria-modal="true" aria-labelledby="mTitle">
+    <h3 id="mTitle" class="font-display text-lg font-semibold text-white"></h3>
+    <p id="mMsg" class="mt-2 text-sm leading-relaxed text-[#7da87d]"></p>
+    <div class="mt-5 flex justify-end gap-2">
+      <button class="btn-ghost" data-close>Cancel</button>
+      <button id="mConfirm" class="btn-danger">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* =========================================================================
+   KJ//TRACK v2 — Weekly Personal Macro Tracker
+   Single-file app · vanilla JS · localStorage persistence · on-device OCR
+   ========================================================================= */
+'use strict';
+
+/* ---------------- Utilities ---------------- */
+const $  = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+const fmt  = n => Math.round(n).toLocaleString('en-US');
+const fmt1 = n => (Math.round(n * 10) / 10).toString();
+const esc  = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const refreshIcons = () => { if (window.lucide) lucide.createIcons(); };
+
+/* Local-timezone-safe date helpers (returns YYYY-MM-DD) */
+const pad = n => String(n).padStart(2, '0');
+const dateStr = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const parseDate = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+const addDays = (s, n) => { const d = parseDate(s); d.setDate(d.getDate() + n); return dateStr(d); };
+const today = () => dateStr(new Date());
+function prettyDate(s){
+  if (s === today()) return 'Today';
+  if (s === addDays(today(), -1)) return 'Yesterday';
+  return parseDate(s).toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short' });
+}
+
+/* ---------------- Week helpers (Monday-start weeks) ---------------- */
+const WEEK_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+function weekStartOf(s){
+  const d = parseDate(s);
+  const offset = (d.getDay() + 6) % 7;          /* Mon=0 … Sun=6 */
+  d.setDate(d.getDate() - offset);
+  return dateStr(d);
+}
+const weekDates  = ws => Array.from({ length: 7 }, (_, i) => addDays(ws, i));
+const weekRangeLabel = ws => {
+  const a = parseDate(ws), b = parseDate(addDays(ws, 6));
+  const fa = a.toLocaleDateString('en-GB', { day:'numeric', month:'short' });
+  const fb = b.toLocaleDateString('en-GB', { day:'numeric', month:'short' });
+  return `${fa} – ${fb}`;
+};
+
+/* ---------------- Storage layer ---------------- */
+const LS = {
+  get(k, fb){
+    try { const v = localStorage.getItem('kjtrack_' + k); return v === null ? fb : JSON.parse(v); }
+    catch(e){ return fb; }
+  },
+  set(k, v){
+    try { localStorage.setItem('kjtrack_' + k, JSON.stringify(v)); }
+    catch(e){ toast('Storage error — data may not persist', 'error'); }
+  },
+  del(k){ localStorage.removeItem('kjtrack_' + k); }
+};
+
+/* ---------------- Constants ---------------- */
+const KJ_PER_KCAL = 4.184;
+
+const ACTIVITY = {
+  sedentary: { mult: 1.2   },
+  light:     { mult: 1.375 },
+  moderate:  { mult: 1.55  },
+  very:      { mult: 1.725 },
+  extreme:   { mult: 1.9   },
+};
+
+/* Diet protocols: factor = TDEE multiplier, split = share of energy P/C/F */
+const PLANS = {
+  cut:        { name:'Fat Loss / Cutting',        short:'Cutting',      icon:'trending-down', factor:0.80,  split:{ p:.40, c:.30, f:.30 }, desc:'A ~20% energy deficit with high protein to strip fat while holding onto muscle.' },
+  bulk:       { name:'Muscle Gain / Bulking',     short:'Bulking',      icon:'dumbbell',      factor:1.125, split:{ p:.25, c:.50, f:.25 }, desc:'A ~10–15% surplus loaded with protein and carbs to fuel serious growth.' },
+  lean:       { name:'Lean Bulk / Clean Bulk',    short:'Lean Bulk',    icon:'sprout',        factor:1.075, split:{ p:.30, c:.40, f:.30 }, desc:'A slight ~5–10% surplus with balanced macros for slow, clean gains.' },
+  maintenance:{ name:'Maintenance',               short:'Maintain',     icon:'scale',         factor:1.00,  split:{ p:.30, c:.40, f:.30 }, desc:'Eat right at your TDEE with a balanced plate to hold your current weight.' },
+  keto:       { name:'Keto / Low-Carb',           short:'Keto',         icon:'flame',         factor:1.00,  split:{ p:.25, c:.05, f:.70 }, keto:true, desc:'Under 50 g of carbs a day, high fat, moderate protein — built for ketosis.' },
+  highprotein:{ name:'High Protein',              short:'High Protein', icon:'beef',          factor:1.00,  split:{ p:.40, c:.30, f:.30 }, desc:'40% of energy from protein — maximum satiety and muscle retention.' },
+  balanced:   { name:'Balanced / General Health', short:'Balanced',     icon:'heart-pulse',   factor:1.00,  split:{ p:.30, c:.40, f:.30 }, desc:'The classic 40-30-30 split — carbs / protein / fat for everyday wellbeing.' },
+};
+
+const CATEGORIES = {
+  protein:'Protein source', carbs:'Carb source', fat:'Fat source', vegetable:'Vegetable',
+  fruit:'Fruit', dairy:'Dairy', snack:'Snack', beverage:'Beverage', meal:'Meal / Recipe', other:'Other',
+};
+
+/* Seed food database — accurate values per listed serving */
+const SEED_FOODS = [
+  { name:'Chicken Breast (cooked)',  serving:100, kj:690,  p:31,   c:0,    f:3.6,  fb:0,   sugar:0,    cat:'protein'   },
+  { name:'Egg (1 large)',            serving:55,  kj:310,  p:6.3,  c:0.4,  f:5.3,  fb:0,   sugar:0.4,  cat:'protein'   },
+  { name:'Salmon (cooked)',          serving:100, kj:862,  p:22,   c:0,    f:12.3, fb:0,   sugar:0,    cat:'protein'   },
+  { name:'Tuna (canned, drained)',   serving:100, kj:485,  p:25.5, c:0,    f:1,    fb:0,   sugar:0,    cat:'protein'   },
+  { name:'Whey Protein (1 scoop)',   serving:30,  kj:502,  p:24,   c:3,    f:1.5,  fb:1,   sugar:2,    cat:'protein'   },
+  { name:'Greek Yogurt (plain)',     serving:100, kj:247,  p:10.2, c:3.6,  f:0.4,  fb:0,   sugar:3.2,  cat:'dairy'     },
+  { name:'Cottage Cheese',           serving:100, kj:410,  p:11.1, c:3.4,  f:4.3,  fb:0,   sugar:2.7,  cat:'dairy'     },
+  { name:'Milk (whole, 1 glass)',    serving:250, kj:638,  p:8,    c:12,   f:8.3,  fb:0,   sugar:12.8, cat:'dairy'     },
+  { name:'White Rice (cooked)',      serving:100, kj:544,  p:2.7,  c:28.2, f:0.3,  fb:0.4, sugar:0.1,  cat:'carbs'     },
+  { name:'Rolled Oats (dry)',        serving:100, kj:1628, p:16.9, c:66.3, f:6.9,  fb:10.6,sugar:0.9,  cat:'carbs'     },
+  { name:'Bread (wholemeal, slice)', serving:34,  kj:351,  p:4.3,  c:14,   f:1.2,  fb:2.3, sugar:1.5,  cat:'carbs'     },
+  { name:'Sweet Potato (baked)',     serving:100, kj:377,  p:2,    c:20.7, f:0.2,  fb:3.3, sugar:6.5,  cat:'carbs'     },
+  { name:'Pasta (cooked)',           serving:100, kj:661,  p:5.8,  c:30.9, f:0.9,  fb:1.8, sugar:0.6,  cat:'carbs'     },
+  { name:'Banana (medium)',          serving:120, kj:446,  p:1.3,  c:27.4, f:0.4,  fb:3.1, sugar:14.7, cat:'fruit'     },
+  { name:'Apple (medium)',           serving:180, kj:392,  p:0.5,  c:25,   f:0.3,  fb:4.4, sugar:19,   cat:'fruit'     },
+  { name:'Avocado (half)',           serving:100, kj:669,  p:2,    c:8.5,  f:14.7, fb:6.7, sugar:0.7,  cat:'fat'       },
+  { name:'Peanut Butter (2 tbsp)',   serving:32,  kj:787,  p:8,    c:6.4,  f:16,   fb:1.9, sugar:2.9,  cat:'fat'       },
+  { name:'Olive Oil (1 tbsp)',       serving:15,  kj:555,  p:0,    c:0,    f:15,   fb:0,   sugar:0,    cat:'fat'       },
+  { name:'Almonds (handful)',        serving:28,  kj:678,  p:5.9,  c:6,    f:14,   fb:3.5, sugar:1.2,  cat:'snack'     },
+  { name:'Broccoli (steamed)',       serving:100, kj:146,  p:3,    c:7.2,  f:0.4,  fb:2.6, sugar:1.4,  cat:'vegetable' },
+];
+
+/* ---------------- State ---------------- */
+let profile        = LS.get('profile', null);
+let planId         = LS.get('plan', 'maintenance');
+if (!PLANS[planId]) planId = 'maintenance';
+let foods          = LS.get('foods', null);
+let logs           = LS.get('logs', {}) || {};
+let editingFoodId  = null;
+let scanBusy       = false;
+const state        = { tab:'dashboard', date: today() };
+
+/* First run → seed the food database */
+if (!Array.isArray(foods)){
+  foods = SEED_FOODS.map(f => ({ ...f, id: uid() }));
+  LS.set('foods', foods);
+  LS.set('plan', planId);
+}
+
+const saveFoods = () => LS.set('foods', foods);
+const saveLogs  = () => LS.set('logs', logs);
+
+/* ---------------- Calculations ---------------- */
+/* Mifflin-St Jeor BMR (kcal/day) */
+function calcBMR(p){
+  const base = 10 * p.weight + 6.25 * p.height - 5 * p.age;
+  if (p.gender === 'female') return base - 161;
+  if (p.gender === 'male')   return base + 5;
+  return base - 78; /* midpoint for 'other' */
+}
+
+/* Daily target set for the current profile + plan */
+function calcTargets(){
+  if (!profile || !profile.weight || !profile.height || !profile.age) return null;
+  const plan = PLANS[planId] || PLANS.maintenance;
+  const bmr  = calcBMR(profile);
+  const mult = (ACTIVITY[profile.activity] || ACTIVITY.moderate).mult;
+  const tdee = bmr * mult;
+  const kcal = tdee * plan.factor;
+  let p = kcal * plan.split.p / 4;
+  let c = kcal * plan.split.c / 4;
+  let f = kcal * plan.split.f / 9;
+  if (plan.keto && c > 50){                     /* keto: cap carbs at 50 g/day, spill energy into fat */
+    c = 50;
+    f = Math.max(0, (kcal - p * 4 - c * 4) / 9);
+  }
+  const fiber = Math.min(40, Math.max(25, (kcal / 1000) * 14));  /* 14 g per 1000 kcal */
+  return { bmr, tdee, kcal, kj: kcal * KJ_PER_KCAL, p, c, f, fiber, plan };
+}
+
+/* Weekly targets = daily targets × 7 */
+function weekTargets(){
+  const t = calcTargets();
+  if (!t) return null;
+  return { ...t, kj: t.kj * 7, p: t.p * 7, c: t.c * 7, f: t.f * 7, fiber: t.fiber * 7 };
+}
+
+/* ---------------- Log data ---------------- */
+const getLog = d => logs[d] || [];
+function dayTotals(d){
+  const t = { kj:0, p:0, c:0, f:0, fb:0, sugar:0 };
+  getLog(d).forEach(e => { t.kj+=e.kj; t.p+=e.p; t.c+=e.c; t.f+=e.f; t.fb+=e.fb; t.sugar+=e.sugar||0; });
+  return t;
+}
+function weekTotals(ws){
+  const t = { kj:0, p:0, c:0, f:0, fb:0, sugar:0, days:0 };
+  weekDates(ws).forEach(d => {
+    const dt = dayTotals(d);
+    if (dt.kj > 0) t.days++;
+    t.kj+=dt.kj; t.p+=dt.p; t.c+=dt.c; t.f+=dt.f; t.fb+=dt.fb; t.sugar+=dt.sugar;
+  });
+  return t;
+}
+
+/* =========================================================================
+   RENDERING
+   ========================================================================= */
+
+/* Shared macro-bar block — works for daily or weekly totals/targets */
+function macroBarsHTML(t, tgt){
+  if (!tgt){
+    return `<div class="py-6 text-center">
+      <p class="text-sm text-[#7da87d]">No targets yet.</p>
+      <button class="btn-ghost mt-3 mx-auto" data-tablink="profile"><i data-lucide="user-round" class="w-4 h-4"></i>Set up profile</button>
+    </div>`;
+  }
+  const rows = [
+    ['Protein', t.p,  tgt.p,     'drumstick'],
+    ['Carbs',   t.c,  tgt.c,     'wheat'],
+    ['Fat',     t.f,  tgt.f,     'droplet'],
+    ['Fiber',   t.fb, tgt.fiber, 'leaf'],
+  ];
+  return rows.map(([label, val, target, icon]) => {
+    const pct = target > 0 ? val / target * 100 : 0;
+    const over = target > 0 && val > target;
+    return `<div class="mb-4 last:mb-0">
+      <div class="flex items-center justify-between mb-1.5 gap-2">
+        <span class="flex items-center gap-2 text-sm text-[#b8d6b8]">
+          <i data-lucide="${icon}" class="w-4 h-4 text-[#00cc33]"></i>${label}
+        </span>
+        <span class="num text-sm ${over ? 'text-[#ff6b6b]' : 'text-[#e8f5e9]'}">${fmt(val)}<span class="text-[#5a705a]"> / ${fmt(target)} g</span></span>
+      </div>
+      <div class="track"><div class="fill ${over ? 'over' : ''}" style="width:${Math.min(pct, 100)}%"></div></div>
+    </div>`;
+  }).join('');
+}
+
+/* Day-status dot colour for a given day vs daily target */
+function dayDotColor(kj){
+  const tgt = calcTargets();
+  if (kj <= 0)   return '#2a3a2a';
+  if (!tgt)      return '#00cc33';
+  const d = Math.abs(kj / tgt.kj - 1);
+  if (d <= 0.10) return '#00ff41';
+  if (d <= 0.25) return '#ffd60a';
+  return '#ff5c5c';
+}
+
+/* Mon–Sun strip used on the dashboard and inside the log */
+function dayStripHTML(ws, selectedDate){
+  return weekDates(ws).map((d, i) => {
+    const t = dayTotals(d);
+    const has = t.kj > 0;
+    const isToday = d === today();
+    const future = d > today();
+    const dot = dayDotColor(t.kj);
+    const cls = ['daycell',
+      isToday ? 'today' : '',
+      d === selectedDate ? 'selected' : '',
+      future ? 'future' : ''].filter(Boolean).join(' ');
+    return `<div class="${cls}" data-day="${d}" title="${prettyDate(d)}${has ? ' — ' + fmt(t.kj) + ' kJ' : ''}">
+      <span class="text-[9px] tracking-[0.18em] ${isToday ? 'text-[#00ff41]' : 'text-[#5a705a]'}">${WEEK_DAYS[i].toUpperCase()}</span>
+      <span class="num text-sm md:text-base font-semibold ${isToday ? 'text-[#00ff41]' : future ? 'text-[#42563f]' : 'text-[#d7e8d7]'}">${parseDate(d).getDate()}</span>
+      <span class="num text-[9px] ${has ? 'text-[#8fce8f]' : 'text-[#42563f]'}">${has ? fmt(t.kj) : future ? '·' : '—'}</span>
+      <span class="w-1.5 h-1.5 rounded-full" style="background:${dot}; box-shadow:0 0 6px ${dot}"></span>
+    </div>`;
+  }).join('');
+}
+
+/* -------- Dashboard (weekly view) -------- */
+function renderDashboard(){
+  const ws   = weekStartOf(today());
+  const wt   = weekTotals(ws);
+  const tgt  = calcTargets();
+  const tgtw = weekTargets();
+  const RING_C = 590.62;
+
+  /* Greeting */
+  const h = new Date().getHours();
+  $('#greetText').textContent = h < 5 ? 'Working late' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
+  $('#greetName').textContent = profile && profile.name ? ', ' + profile.name : '';
+  const full = new Date().toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long' });
+  $('#todayLabel').textContent = `${full} · Week of ${weekRangeLabel(ws)}`;
+  $('#planChip').textContent = tgtw ? `${tgtw.plan.short} · ${fmt(tgtw.kj)} kJ / week` : 'No plan configured';
+
+  /* First-run banner */
+  $('#profileBanner').classList.toggle('hidden', !!tgtw);
+
+  /* Ring gauge — weekly budget */
+  const ring = $('#ringFill');
+  if (tgtw){
+    const pct = wt.kj / tgtw.kj;
+    const over = wt.kj > tgtw.kj;
+    ring.style.strokeDashoffset = RING_C * (1 - Math.min(pct, 1));
+    ring.style.stroke = over ? '#ff4d4d' : 'url(#ringGrad)';
+    const rem = tgtw.kj - wt.kj;
+    $('#ringRemain').textContent = (rem < 0 ? '−' : '') + fmt(Math.abs(rem));
+    $('#ringRemain').className = `num text-4xl leading-none font-bold ${over ? 'text-[#ff6b6b]' : 'text-white'}`;
+    $('#ringRemainLabel').textContent = over ? 'kJ over this week' : 'kJ left this week';
+    $('#ringSub').textContent = `${fmt(wt.kj)} / ${fmt(tgtw.kj)} kJ`;
+    $('#ringPct').textContent = `${Math.round(pct * 100)}% of weekly budget`;
+    $('#dashTargetKj').textContent = `Weekly target ${fmt(tgtw.kj)} kJ`;
+  } else {
+    ring.style.strokeDashoffset = RING_C;
+    $('#ringRemain').textContent = '—';
+    $('#ringRemain').className = 'num text-4xl leading-none font-bold text-[#5a705a]';
+    $('#ringRemainLabel').textContent = 'no target set';
+    $('#ringSub').textContent = '';
+    $('#ringPct').textContent = 'set up your profile';
+    $('#dashTargetKj').textContent = '—';
+  }
+
+  /* Weekly macro bars */
+  $('#dashMacros').innerHTML = macroBarsHTML(wt, tgtw);
+
+  /* Weekly energy mix (17/17/37/8 kJ per gram) */
+  const ep = wt.p * 17, ec = wt.c * 17, ef = wt.f * 37, efb = wt.fb * 8;
+  const sum = ep + ec + ef + efb;
+  if (sum > 0){
+    const sp = ep/sum*100, sc = ec/sum*100, sf = ef/sum*100, sfb = efb/sum*100;
+    $('#energySplit').innerHTML = `<div class="flex h-2.5 rounded-full overflow-hidden border border-[rgba(0,255,65,.12)]">
+      <div style="width:${sp}%; background:#00ff41"></div>
+      <div style="width:${sc}%; background:#00cc33"></div>
+      <div style="width:${sf}%; background:#0e7a30"></div>
+      <div style="width:${sfb}%; background:#0a3d18"></div>
+    </div>`;
+    $('#energyLegend').innerHTML = `
+      <span><span class="inline-block w-2 h-2 rounded-full mr-1" style="background:#00ff41"></span>P ${Math.round(sp)}%</span>
+      <span><span class="inline-block w-2 h-2 rounded-full mr-1" style="background:#00cc33"></span>C ${Math.round(sc)}%</span>
+      <span><span class="inline-block w-2 h-2 rounded-full mr-1" style="background:#0e7a30"></span>F ${Math.round(sf)}%</span>`;
+  } else {
+    $('#energySplit').innerHTML = `<div class="h-2.5 rounded-full bg-[rgba(0,255,65,.06)] border border-[rgba(0,255,65,.09)]"></div>`;
+    $('#energyLegend').innerHTML = `<span>log food to see this week's energy mix</span>`;
+  }
+
+  /* Day strip */
+  $('#dashWeekStrip').innerHTML = dayStripHTML(ws, null);
+
+  /* Week snapshot */
+  const avg = wt.days > 0 ? wt.kj / wt.days : 0;
+  const proj = avg * 7;
+  $('#snapDays').innerHTML = `${wt.days}<span class="text-xs text-[#5a705a]">/7</span>`;
+  $('#snapAvg').textContent = fmt(avg);
+  $('#snapProj').textContent = fmt(proj);
+  if (!tgtw){
+    $('#snapChip').className = 'pill pill-mute';
+    $('#snapChip').textContent = 'No target';
+    $('#snapNote').textContent = 'Set up your profile to get a weekly kilojoule budget.';
+  } else if (wt.days === 0){
+    $('#snapChip').className = 'pill pill-mute';
+    $('#snapChip').textContent = 'No data';
+    $('#snapNote').textContent = 'Nothing logged this week yet — quick-add your first item on the left.';
+  } else {
+    const drift = (proj - tgtw.kj) / tgtw.kj;
+    const chip = Math.abs(drift) <= 0.05
+      ? ['pill-ok', 'On track']
+      : drift > 0 ? ['pill-bad', `+${Math.round(drift * 100)}% proj.`] : ['pill-warn', `${Math.round(drift * 100)}% proj.`];
+    $('#snapChip').className = 'pill ' + chip[0];
+    $('#snapChip').textContent = chip[1];
+    $('#snapNote').textContent = `Across ${wt.days} logged day${wt.days === 1 ? '' : 's'} you're averaging ${fmt(avg)} kJ/day — projected to ${drift > 0.05 ? 'overshoot' : drift < -0.05 ? 'finish under' : 'hit'} the ${fmt(tgtw.kj)} kJ weekly budget at this pace.`;
+  }
+
+  updateAddPreview('quick');
+  refreshIcons();
+}
+
+/* -------- Food log -------- */
+function renderLog(){
+  $('#logDate').value = state.date;
+  $('#logHeadline').textContent = 'Entries — ' + prettyDate(state.date);
+  const entries = getLog(state.date);
+  $('#logCount').textContent = `${entries.length} item${entries.length === 1 ? '' : 's'}`;
+
+  /* Week strip (highlights the selected day) */
+  $('#logWeekStrip').innerHTML = dayStripHTML(weekStartOf(state.date), state.date);
+
+  /* Entry rows */
+  if (!entries.length){
+    $('#entriesList').innerHTML = `<div class="py-10 text-center">
+      <div class="mx-auto w-11 h-11 rounded-full border border-[rgba(0,255,65,.15)] bg-[rgba(0,255,65,.05)] flex items-center justify-center text-[#00cc33]">
+        <i data-lucide="utensils" class="w-5 h-5"></i>
+      </div>
+      <p class="mt-3 text-sm text-[#7da87d]">Nothing logged for this day yet.</p>
+      <p class="text-xs text-[#4a5d4a] mt-1">Pick a food on the right and hit “Add to log”.</p>
+    </div>`;
+  } else {
+    $('#entriesList').innerHTML = entries.map(e => `
+      <div class="entry">
+        <div class="min-w-0 flex-1">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="font-medium text-sm text-[#e8f5e9]">${esc(e.name)}</span>
+            <span class="chip">${e.unit === 'g' ? fmt1(e.qty) + ' g' : fmt1(e.qty) + ' srv'}</span>
+          </div>
+          <div class="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-[#7da87d] num">
+            <span>P ${fmt1(e.p)}g</span><span>C ${fmt1(e.c)}g</span><span>F ${fmt1(e.f)}g</span><span>Fb ${fmt1(e.fb)}g</span>
+          </div>
+        </div>
+        <div class="text-right shrink-0">
+          <div class="num font-semibold text-[#00ff41]">${fmt(e.kj)}</div>
+          <div class="text-[9px] uppercase tracking-[0.2em] text-[#5a705a]">kJ</div>
+        </div>
+        <button class="icon-btn danger shrink-0" data-del-entry="${e.id}" title="Delete entry" aria-label="Delete entry">
+          <i data-lucide="trash-2" class="w-4 h-4"></i>
+        </button>
+      </div>`).join('');
+  }
+
+  /* Totals + remaining for the selected day */
+  const t = dayTotals(state.date);
+  const tgt = calcTargets();
+  const cell = (label, val, cls, sub) => `
+    <div class="text-center">
+      <div class="num font-semibold text-sm md:text-base ${cls}">${val}</div>
+      <div class="text-[9px] uppercase tracking-[0.18em] text-[#5a705a] mt-1">${label}</div>
+      ${sub ? `<div class="text-[9px] num ${sub.cls} mt-0.5">${sub.txt}</div>` : ''}
+    </div>`;
+
+  let html = `<div class="mt-5">
+    <div class="rounded-xl border border-[rgba(0,255,65,.12)] bg-[rgba(0,0,0,.3)] p-3.5 md:p-4">
+      <p class="text-[9px] uppercase tracking-[0.22em] text-[#00cc33] font-semibold mb-2.5">Daily total</p>
+      <div class="grid grid-cols-5 gap-1.5">
+        ${cell('kJ', fmt(t.kj), 'text-[#00ff41]')}
+        ${cell('Protein', fmt1(t.p) + 'g', 'text-[#e8f5e9]')}
+        ${cell('Carbs', fmt1(t.c) + 'g', 'text-[#e8f5e9]')}
+        ${cell('Fat', fmt1(t.f) + 'g', 'text-[#e8f5e9]')}
+        ${cell('Fiber', fmt1(t.fb) + 'g', 'text-[#e8f5e9]')}
+      </div>
+    </div>`;
+
+  if (tgt){
+    const rem = (val, tg) => {
+      const r = tg - val;
+      const over = r < 0;
+      return cell('left', fmt(Math.abs(r)), over ? 'text-[#ff6b6b]' : 'text-[#00ff41]', { cls: over ? 'text-[#ff6b6b]' : 'text-[#5a705a]', txt: over ? 'over' : 'left' });
+    };
+    html += `<div class="mt-2.5 rounded-xl border border-[rgba(0,255,65,.08)] bg-[rgba(0,0,0,.2)] p-3.5 md:p-4">
+      <p class="text-[9px] uppercase tracking-[0.22em] text-[#5a705a] font-semibold mb-2.5">Remaining of daily share</p>
+      <div class="grid grid-cols-5 gap-1.5">
+        ${rem(t.kj, tgt.kj)}${rem(t.p, tgt.p)}${rem(t.c, tgt.c)}${rem(t.f, tgt.f)}${rem(t.fb, tgt.fiber)}
+      </div>
+    </div>`;
+  }
+  html += `</div>`;
+  $('#logTotals').innerHTML = html;
+
+  /* Progress bars (daily) + running weekly chip */
+  $('#logMacroBars').innerHTML = macroBarsHTML(t, tgt);
+  $('#logKjSummary').textContent = tgt ? `${fmt(t.kj)} / ${fmt(tgt.kj)} kJ` : '—';
+  const ws = weekStartOf(state.date);
+  const wt = weekTotals(ws);
+  const tgtw = weekTargets();
+  $('#logWeekChip').textContent = tgtw ? `wk ${fmt(wt.kj)} / ${fmt(tgtw.kj)}` : '';
+
+  updateAddPreview('log');
+  refreshIcons();
+}
+
+/* -------- Foods database -------- */
+function renderFoods(){
+  const q = ($('#foodSearch').value || '').trim().toLowerCase();
+  const cat = $('#foodCatFilter').value;
+  const list = foods.filter(f => (!cat || f.cat === cat) && f.name.toLowerCase().includes(q));
+  $('#foodCount').textContent = `${list.length} / ${foods.length} foods`;
+
+  if (!list.length){
+    $('#foodsGrid').innerHTML = `<div class="col-span-full card p-10 text-center">
+      <div class="mx-auto w-11 h-11 rounded-full border border-[rgba(0,255,65,.15)] bg-[rgba(0,255,65,.05)] flex items-center justify-center text-[#00cc33]">
+        <i data-lucide="search-x" class="w-5 h-5"></i>
+      </div>
+      <p class="mt-3 text-sm text-[#7da87d]">No foods match your filter.</p>
+    </div>`;
+  } else {
+    $('#foodsGrid').innerHTML = list.map(f => `
+      <div class="card food-card p-4">
+        <div class="flex items-start justify-between gap-2">
+          <div class="min-w-0">
+            <h4 class="font-medium text-sm text-[#e8f5e9] leading-snug">${esc(f.name)}</h4>
+            <span class="chip mt-1.5 inline-block">${CATEGORIES[f.cat] || 'Other'}</span>
+          </div>
+          <div class="flex gap-0.5 shrink-0 -mt-1 -mr-1">
+            <button class="icon-btn" data-edit="${f.id}" title="Edit food" aria-label="Edit food"><i data-lucide="pencil" class="w-4 h-4"></i></button>
+            <button class="icon-btn danger" data-del="${f.id}" title="Delete food" aria-label="Delete food"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+          </div>
+        </div>
+        <div class="mt-3 flex items-baseline gap-1.5">
+          <span class="num text-2xl font-bold text-[#00ff41]">${fmt(f.kj)}</span>
+          <span class="text-xs text-[#5a705a] num">kJ / ${fmt1(f.serving)}g serving</span>
+        </div>
+        <div class="mt-3 grid grid-cols-4 gap-1 text-center">
+          ${[['P', f.p], ['C', f.c], ['F', f.f], ['Fb', f.fb]].map(([k, v]) => `
+            <div class="rounded-lg border border-[rgba(0,255,65,.09)] bg-[rgba(0,0,0,.28)] py-1.5">
+              <div class="num text-[13px] text-[#d7e8d7]">${fmt1(v)}<span class="text-[#5a705a]">g</span></div>
+              <div class="text-[9px] uppercase tracking-[0.2em] text-[#5a705a] mt-0.5">${k}</div>
+            </div>`).join('')}
+        </div>
+        ${f.sugar > 0 ? `<p class="mt-2 text-[11px] num text-[#5a705a]">Sugar ${fmt1(f.sugar)}g</p>` : ''}
+      </div>`).join('');
+  }
+  refreshIcons();
+}
+
+/* -------- Weekly history -------- */
+function statusFor(kj, target){
+  if (!target)               return ['pill-mute', 'No target'];
+  if (!kj)                   return ['pill-mute', 'No data'];
+  const d = Math.abs(kj / target - 1);
+  if (d <= 0.10)             return ['pill-ok',  'On target'];
+  if (d <= 0.25)             return ['pill-warn', 'Slightly off'];
+  return                            ['pill-bad',  kj > target ? 'Over' : 'Under'];
+}
+
+function renderHistory(){
+  const tgtw = weekTargets();
+  const curWs = weekStartOf(today());
+  const weeks = [];
+  for (let i = 0; i < 8; i++){
+    const ws = addDays(curWs, -7 * i);
+    weeks.push({ ws, t: weekTotals(ws), current: i === 0 });
+  }
+
+  /* Bar chart — oldest → newest */
+  const maxKj = Math.max(1, tgtw ? tgtw.kj : 0, ...weeks.map(w => w.t.kj));
+  $('#histNote').textContent = tgtw ? `weekly target ${fmt(tgtw.kj)} kJ` : 'no target set';
+  $('#weekChart').innerHTML = [...weeks].reverse().map(w => {
+    const has = w.t.kj > 0;
+    const pct = has ? Math.max(5, w.t.kj / maxKj * 100) : 0;
+    const lab = parseDate(w.ws).toLocaleDateString('en-GB', { day:'numeric', month:'narrow' }).replace(' ', '');
+    return `<div class="flex-1 flex flex-col items-center justify-end gap-1.5 h-full min-w-0" title="Week of ${weekRangeLabel(w.ws)} — ${has ? fmt(w.t.kj) + ' kJ' : 'no data'}">
+      ${has ? `<span class="num text-[9px] text-[#7da87d] hidden md:block">${(w.t.kj / 1000).toFixed(1)}k</span>` : ''}
+      <div class="w-full max-w-[44px] rounded-t-md" style="height:${has ? pct : 3}%; background:${has ? 'linear-gradient(180deg,#00ff41,#0a5c1e)' : 'rgba(0,255,65,.12)'}; box-shadow:${has ? '0 0 14px -2px rgba(0,255,65,.35)' : 'none'}; ${w.current ? 'outline:1px solid rgba(0,255,65,.4); outline-offset:1px;' : ''}"></div>
+      <span class="text-[10px] num ${w.current ? 'text-[#00ff41]' : 'text-[#5a705a]'}">${lab}</span>
+    </div>`;
+  }).join('');
+
+  /* Table — newest first */
+  $('#weekBody').innerHTML = weeks.map(w => {
+    const has = w.t.kj > 0;
+    const [cls, lab] = w.current ? ['pill-ok', 'In progress'] : statusFor(w.t.kj, tgtw ? tgtw.kj : 0);
+    const avgDay = has ? w.t.kj / 7 : 0;
+    return `<tr data-week="${w.ws}" class="cursor-pointer hover:bg-[rgba(0,255,65,.04)] transition-colors">
+      <td class="py-2.5 pr-3 text-sm text-[#d7e8d7] whitespace-nowrap">${weekRangeLabel(w.ws)}${w.current ? ' <span class="chip">now</span>' : ''}</td>
+      <td class="py-2.5 pr-3 num text-sm ${has ? 'text-[#00ff41]' : 'text-[#5a705a]'}">${has ? fmt(w.t.kj) : '—'}</td>
+      <td class="py-2.5 pr-3 num text-sm hidden sm:table-cell ${has ? '' : 'text-[#5a705a]'}">${has ? fmt(avgDay) : '—'}</td>
+      <td class="py-2.5 pr-3 num text-sm hidden sm:table-cell ${has ? '' : 'text-[#5a705a]'}">${has ? w.t.days + '/7' : '—'}</td>
+      <td class="py-2.5 pr-3 num text-sm hidden md:table-cell ${has ? '' : 'text-[#5a705a]'}">${has ? fmt(w.t.p) + 'g' : '—'}</td>
+      <td class="py-2.5 pr-3 num text-sm hidden md:table-cell ${has ? '' : 'text-[#5a705a]'}">${has ? fmt(w.t.c) + 'g' : '—'}</td>
+      <td class="py-2.5 pr-3 num text-sm hidden md:table-cell ${has ? '' : 'text-[#5a705a]'}">${has ? fmt(w.t.f) + 'g' : '—'}</td>
+      <td class="py-2.5 text-right"><span class="pill ${cls}">${lab}</span></td>
+    </tr>`;
+  }).join('');
+
+  /* Averages */
+  const withData = weeks.filter(w => w.t.kj > 0);
+  if (withData.length){
+    const avg = k => withData.reduce((s, w) => s + w.t[k], 0) / withData.length;
+    $('#weekAvg').textContent = `Average per logged week: ${fmt(avg('kj'))} kJ · ${fmt(avg('kj') / 7)} kJ/day · P ${fmt(avg('p'))}g · C ${fmt(avg('c'))}g · F ${fmt(avg('f'))}g.`;
+  } else {
+    $('#weekAvg').textContent = 'Log some food to build your weekly history.';
+  }
+  refreshIcons();
+}
+
+/* -------- Profile results -------- */
+function planKJ(key){
+  if (!profile || !profile.weight || !profile.height || !profile.age) return null;
+  const mult = (ACTIVITY[profile.activity] || ACTIVITY.moderate).mult;
+  return calcBMR(profile) * mult * PLANS[key].factor * KJ_PER_KCAL;
+}
+
+function renderProfileResults(){
+  const tgt = calcTargets();
+
+  /* Selected plan outline + live weekly kJ badges */
+  $$('#planGrid .plan-card').forEach(card => {
+    const input = card.querySelector('input[type=radio]');
+    card.classList.toggle('selected', input.value === planId);
+    input.checked = input.value === planId;
+  });
+  $$('#planGrid [data-plankj]').forEach(badge => {
+    const kj = planKJ(badge.dataset.plankj);
+    badge.textContent = kj ? `≈ ${fmt(kj * 7)} kJ/wk` : 'set stats ↑';
+  });
+
+  /* Numbers panel — daily share + weekly budget */
+  if (tgt){
+    const tgtw = weekTargets();
+    $('#profileResults').innerHTML = `
+      <div class="space-y-2.5">
+        <div class="flex items-baseline justify-between gap-2">
+          <span class="text-sm text-[#7da87d]">BMR</span>
+          <span class="num text-sm text-[#d7e8d7]">${fmt(tgt.bmr * KJ_PER_KCAL)} kJ</span>
+        </div>
+        <div class="flex items-baseline justify-between gap-2">
+          <span class="text-sm text-[#7da87d]">TDEE</span>
+          <span class="num text-sm text-[#d7e8d7]">${fmt(tgt.tdee * KJ_PER_KCAL)} kJ</span>
+        </div>
+        <div class="flex items-baseline justify-between gap-2">
+          <span class="text-sm text-[#7da87d]">Daily share</span>
+          <span class="num text-sm text-[#d7e8d7]">${fmt(tgt.kj)} kJ</span>
+        </div>
+        <div class="pt-2.5 mt-1 border-t border-[rgba(0,255,65,.1)]">
+          <div class="flex items-baseline justify-between gap-2">
+            <span class="text-sm font-medium text-white">Weekly budget</span>
+            <span class="num text-2xl font-bold text-[#00ff41]">${fmt(tgtw.kj)}<span class="text-xs text-[#5a705a] font-normal"> kJ</span></span>
+          </div>
+          <p class="mt-1 text-[11px] text-[#5a705a] num text-right">${tgtw.plan.name}</p>
+        </div>
+        <div class="grid grid-cols-2 gap-1.5 pt-1">
+          ${[['Protein/wk', tgtw.p], ['Carbs/wk', tgtw.c], ['Fat/wk', tgtw.f], ['Fiber/wk', tgtw.fiber]].map(([k, v]) => `
+            <div class="rounded-lg border border-[rgba(0,255,65,.1)] bg-[rgba(0,0,0,.28)] px-2.5 py-2 flex items-baseline justify-between">
+              <span class="text-[10px] uppercase tracking-[0.14em] text-[#5a705a]">${k}</span>
+              <span class="num text-sm text-[#d7e8d7]">${fmt(v)}g</span>
+            </div>`).join('')}
+        </div>
+      </div>`;
+  } else {
+    $('#profileResults').innerHTML = `
+      <div class="rounded-xl border border-dashed border-[rgba(0,255,65,.2)] bg-[rgba(0,0,0,.2)] p-5 text-center">
+        <i data-lucide="calculator" class="w-5 h-5 text-[#3d5443] mx-auto"></i>
+        <p class="mt-2.5 text-sm text-[#7da87d]">Fill in age, height and weight to calculate your BMR, TDEE and weekly budget.</p>
+      </div>`;
+  }
+
+  /* Goal projection */
+  const proj = $('#goalProjection');
+  if (tgt && profile.weight && profile.goalWeight != null){
+    const diff = profile.goalWeight - profile.weight;
+    const weeklyKg = (tgt.kcal - tgt.tdee) * 7 / 7700; /* 7700 kcal ≈ 1 kg body weight */
+    let box;
+    if (Math.abs(diff) < 0.2){
+      box = ['ok', 'circle-check', `You're at your goal weight — nice work. Maintenance mode will hold you here.`];
+    } else if (Math.abs(weeklyKg) < 0.05){
+      box = ['warn', 'triangle-alert', `This plan is close to maintenance — it won't move you toward your ${fmt1(profile.goalWeight)} kg goal. Consider ${diff < 0 ? 'Cutting' : 'Bulking'}.`];
+    } else if ((diff < 0) === (weeklyKg < 0)){
+      const weeks = diff / weeklyKg;
+      const eta = new Date(); eta.setDate(eta.getDate() + Math.round(weeks * 7));
+      box = ['ok', 'trending-' + (weeklyKg < 0 ? 'down' : 'up'),
+        `Expect ≈ ${fmt1(Math.abs(weeklyKg))} kg/week on this plan — on track for ${fmt1(profile.goalWeight)} kg around ${eta.toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' })}.`];
+    } else {
+      box = ['warn', 'triangle-alert', `Heads up — this plan moves you away from your goal weight. Maybe switch protocols.`];
+    }
+    proj.innerHTML = `<div class="flex items-start gap-2.5 rounded-xl border border-[rgba(0,255,65,.1)] bg-[rgba(0,0,0,.25)] p-3.5">
+      <i data-lucide="${box[1]}" class="w-4 h-4 mt-0.5 shrink-0 ${box[0] === 'ok' ? 'text-[#00ff41]' : 'text-[#ffd60a]'}"></i>
+      <p class="text-xs leading-relaxed text-[#b8d6b8]">${box[2]}</p>
+    </div>`;
+  } else {
+    proj.innerHTML = '';
+  }
+  refreshIcons();
+}
+
+/* -------- Settings stats -------- */
+function updateSettingsStats(){
+  $('#statFoods').textContent = foods.length;
+  const days = Object.keys(logs).length;
+  const entries = Object.values(logs).reduce((s, a) => s + a.length, 0);
+  $('#statEntries').textContent = entries;
+  $('#statDays').textContent = days;
+  let bytes = 0;
+  ['profile', 'plan', 'foods', 'logs'].forEach(k => { const v = localStorage.getItem('kjtrack_' + k); if (v) bytes += v.length; });
+  $('#statSize').textContent = (bytes / 1024).toFixed(1) + ' KB';
+}
+
+function renderAll(){
+  renderDashboard();
+  renderLog();
+  renderFoods();
+  renderHistory();
+  renderProfileResults();
+  updateSettingsStats();
+}
+
+/* -------- Tab navigation -------- */
+function switchTab(tab){
+  state.tab = tab;
+  $$('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  $$('.page').forEach(p => p.classList.toggle('active', p.id === 'page-' + tab));
+  if (tab === 'dashboard') renderDashboard();
+  if (tab === 'log')       renderLog();
+  if (tab === 'foods')     renderFoods();
+  if (tab === 'history')   renderHistory();
+  if (tab === 'profile')   renderProfileResults();
+  if (tab === 'settings')  updateSettingsStats();
+  window.scrollTo({ top: 0, behavior:'smooth' });
+}
+
+/* =========================================================================
+   FOOD PICKER COMBO  (reusable for Log + Quick-add)
+   ========================================================================= */
+function setupCombo(prefix, onChange){
+  const root  = $('#' + prefix + 'Combo');
+  const input = root.querySelector('[data-role=combo-input]');
+  const list  = root.querySelector('.combo-list');
+
+  const open  = () => { renderList(); list.classList.remove('hidden'); };
+  const close = () => list.classList.add('hidden');
+
+  function renderList(){
+    const q = input.value.trim().toLowerCase();
+    const items = foods.filter(f => f.name.toLowerCase().includes(q)).slice(0, 40);
+    list.innerHTML = items.length
+      ? items.map(f => `
+          <button type="button" class="combo-item" data-id="${f.id}">
+            <span class="truncate">${esc(f.name)}</span>
+            <span class="num text-[11px] text-[#5a705a] shrink-0 ml-3">${fmt(f.kj)} kJ · ${fmt1(f.serving)}g</span>
+          </button>`).join('')
+      : `<div class="px-3 py-3 text-sm text-[#5a705a]">No matches — register it in “My Foods” first.</div>`;
+  }
+
+  input.addEventListener('focus', open);
+  input.addEventListener('input', () => { root.dataset.foodId = ''; open(); onChange(); });
+  input.addEventListener('keydown', e => { if (e.key === 'Escape'){ close(); input.blur(); } });
+
+  /* mousedown so selection happens before the input loses focus */
+  list.addEventListener('mousedown', e => {
+    const b = e.target.closest('.combo-item');
+    if (!b) return;
+    e.preventDefault();
+    const f = foods.find(x => x.id === b.dataset.id);
+    if (!f) return;
+    root.dataset.foodId = f.id;
+    input.value = f.name;
+    close();
+    onChange();
+    const qty = $('#' + prefix + 'Qty');
+    if (qty){ qty.focus(); qty.select(); }
+  });
+
+  document.addEventListener('click', e => { if (!root.contains(e.target)) close(); });
+}
+
+function resetCombos(){
+  ['log', 'quick'].forEach(pfx => {
+    const root = $('#' + pfx + 'Combo');
+    root.dataset.foodId = '';
+    root.querySelector('[data-role=combo-input]').value = '';
+    updateAddPreview(pfx);
+  });
+}
+
+/* Live nutrition preview under each add form */
+function updateAddPreview(prefix){
+  const root = $('#' + prefix + 'Combo');
+  const el   = $('#' + prefix + 'Preview');
+  const food = foods.find(f => f.id === root.dataset.foodId);
+  const unit = prefix === 'log' ? $('#logUnit').value : 'srv';
+  if (prefix === 'log'){
+    $('#logUnit').options[0].textContent = food ? `servings (${fmt1(food.serving)}g)` : 'servings';
+  }
+  if (!food){
+    el.innerHTML = `<span class="flex items-center gap-2"><i data-lucide="info" class="w-3.5 h-3.5 text-[#3d5443]"></i>Select a food to preview its nutrition.</span>`;
+    refreshIcons();
+    return;
+  }
+  const qtyRaw = parseFloat($('#' + prefix + 'Qty').value);
+  const qty = qtyRaw > 0 ? qtyRaw : 1;
+  const m = unit === 'g' ? qty / food.serving : qty;
+  const qtyTxt = unit === 'g' ? `${fmt1(qty)} g` : `${fmt1(qty)} × ${fmt1(food.serving)}g`;
+  el.innerHTML = `
+    <div class="flex items-baseline justify-between gap-2 flex-wrap">
+      <span class="num text-lg font-bold text-[#00ff41]">${fmt(food.kj * m)} <span class="text-xs font-normal text-[#5a705a]">kJ</span></span>
+      <span class="text-[11px] num text-[#5a705a]">${qtyTxt}</span>
+    </div>
+    <div class="mt-1.5 flex flex-wrap gap-1.5">
+      <span class="chip">P ${fmt1(food.p * m)}g</span>
+      <span class="chip">C ${fmt1(food.c * m)}g</span>
+      <span class="chip">F ${fmt1(food.f * m)}g</span>
+      <span class="chip">Fb ${fmt1(food.fb * m)}g</span>
+    </div>`;
+}
+
+/* Add an entry from either add-form */
+function addEntry(prefix){
+  const root = $('#' + prefix + 'Combo');
+  const food = foods.find(f => f.id === root.dataset.foodId);
+  if (!food){ toast('Pick a food from the dropdown list', 'error'); return; }
+  const qty = parseFloat($('#' + prefix + 'Qty').value);
+  if (!qty || qty <= 0){ toast('Enter an amount greater than zero', 'error'); return; }
+  const unit = prefix === 'log' ? $('#logUnit').value : 'srv';
+  const m = unit === 'g' ? qty / food.serving : qty;
+  const r = v => Math.round(v * 100) / 100;
+  const entry = {
+    id: uid(), foodId: food.id, name: food.name, qty, unit, serving: food.serving,
+    kj: r(food.kj * m), p: r(food.p * m), c: r(food.c * m), f: r(food.f * m),
+    fb: r(food.fb * m), sugar: r((food.sugar || 0) * m),
+  };
+  const date = prefix === 'quick' ? today() : state.date;
+  (logs[date] = logs[date] || []).push(entry);
+  saveLogs();
+  $('#' + prefix + 'Qty').value = prefix === 'quick' ? '1' : '';
+  toast(`Logged ${esc(food.name)} — ${fmt(entry.kj)} kJ`);
+  if (prefix === 'quick'){ renderDashboard(); renderLog(); }
+  else { renderLog(); renderDashboard(); }
+  renderHistory();
+}
+
+/* =========================================================================
+   LABEL SCANNER — OCR (on-device) + text parsing
+   ========================================================================= */
+
+/* Read a photo with Tesseract OCR, drop text into the textarea, auto-parse */
+async function runOcr(file){
+  if (scanBusy) return;
+  if (typeof Tesseract === 'undefined'){
+    toast('OCR engine could not load — paste the label text instead', 'error');
+    return;
+  }
+  scanBusy = true;
+  const wrap = $('#ocrWrap'), fill = $('#ocrFill'), status = $('#ocrStatus'), thumb = $('#scanThumb');
+  const url = URL.createObjectURL(file);
+  thumb.src = url;
+  thumb.classList.remove('hidden');
+  wrap.classList.remove('hidden');
+  fill.style.width = '0%';
+  status.textContent = 'Preparing OCR engine…';
+  try {
+    const res = await Tesseract.recognize(file, 'eng', {
+      logger: m => {
+        if (m.status === 'recognizing text'){
+          fill.style.width = Math.round(m.progress * 100) + '%';
+          status.textContent = `Reading label… ${Math.round(m.progress * 100)}%`;
+        }
+      }
+    });
+    const text = (res && res.data && res.data.text ? res.data.text : '').trim();
+    if (!text){
+      status.textContent = 'No text found.';
+      toast('Could not read any text — try a closer, sharper, well-lit photo', 'error');
+    } else {
+      $('#labelText').value = text;
+      status.textContent = `Done — extracted ${text.split(/\s+/).length} words.`;
+      fill.style.width = '100%';
+      parseAndFill('photo');
+    }
+  } catch(err){
+    console.error(err);
+    status.textContent = 'OCR failed.';
+    toast('OCR failed — paste the label text instead', 'error');
+  } finally {
+    scanBusy = false;
+    setTimeout(() => { wrap.classList.add('hidden'); URL.revokeObjectURL(url); }, 2500);
+  }
+}
+
+/* Parse nutrition-label text into { kj, p, c, f, fb, sugar, serving, name } */
+function parseLabelText(raw){
+  const out = { kj:null, p:null, c:null, f:null, fb:null, sugar:null, serving:null, name:null };
+  const clean = String(raw).replace(/[|~·•●]/g, ' ')
+                           .replace(/(\d),(\d{3}\b)/g, '$1$2')     /* 1,234 → 1234 */
+                           .replace(/(\d),(\d{1,2}\b)/g, '$1.$2');  /* 3,4g  → 3.4g  */
+  const lines = clean.split(/\n|;/).map(l => l.trim()).filter(Boolean);
+  const flat  = ' ' + lines.join(' ') + ' ';
+
+  /* Grab the first plausible number in a string */
+  const firstNum = s => {
+    const m = String(s).match(/(\d+(?:\.\d+)?)/);
+    return m ? parseFloat(m[1]) : null;
+  };
+
+  /* Find the value following a keyword on its line (skip %-only lines for macros) */
+  function nutrientVal(keywords){
+    for (const line of lines){
+      const low = line.toLowerCase();
+      for (const kw of keywords){
+        const i = low.indexOf(kw);
+        if (i === -1) continue;
+        const v = firstNum(low.slice(i + kw.length));
+        if (v !== null && v < 950) return v;
+      }
+    }
+    return null;
+  }
+
+  /* Energy: prefer kJ, then convert calories */
+  let m = flat.toLowerCase().match(/(\d[\d\s.,]*\d|\d)\s*kj\b/);
+  if (m) out.kj = parseFloat(m[1].replace(/[\s]/g, '').replace(',', '.'));
+  if (out.kj === null || !isFinite(out.kj)){
+    m = flat.toLowerCase().match(/(\d[\d.,]*)\s*(?:k?cal|calories)\b/);
+    if (m){
+      const kcal = parseFloat(m[1].replace(',', '.'));
+      if (isFinite(kcal)) out.kj = kcal * KJ_PER_KCAL;
+    } else {
+      out.kj = null;
+    }
+  }
+
+  /* Macros */
+  out.p     = nutrientVal(['protein']);
+  out.c     = nutrientVal(['total carbohydrate', 'carbohydrate', 'carb.']);
+  out.f     = nutrientVal(['fat, total', 'total fat', 'fat']);
+  out.fb    = nutrientVal(['dietary fiber', 'dietary fibre', 'fibre', 'fiber']);
+  out.sugar = nutrientVal(['sugars', 'sugar']);
+
+  /* Serving size */
+  let s = flat.toLowerCase().match(/serv(?:ing|e)?\s*size[:\s]*([\d]+(?:[.,]\d+)?)/);
+  if (s) out.serving = parseFloat(s[1].replace(',', '.'));
+  if (out.serving === null){
+    s = flat.toLowerCase().match(/([\d]+(?:[.,]\d+)?)\s*(?:g|ml)\s*per\s*serve/);
+    if (s) out.serving = parseFloat(s[1].replace(',', '.'));
+  }
+
+  /* Guess a product name: first short line without digits / nutrient keywords */
+  const skipWords = ['nutrition', 'energy', 'protein', 'carb', 'fat', 'fibre', 'fiber', 'sugar', 'sodium', 'salt', 'serving', 'per ', '%', 'amount', 'average', 'ingredient', 'allergen'];
+  for (const line of lines){
+    const l = line.trim();
+    if (l.length < 3 || l.length > 42)  continue;
+    if (/\d/.test(l))                   continue;
+    if (skipWords.some(wd => l.toLowerCase().includes(wd))) continue;
+    out.name = l.replace(/\s+/g, ' ');
+    break;
+  }
+  return out;
+}
+
+/* Fill the food form with parsed values and flag it for review */
+function fillParsed(r){
+  let found = 0;
+  const set = (id, v) => { if (v !== null && isFinite(v)){ $(id).value = Math.round(v * 10) / 10; found++; } };
+  set('#fServing', r.serving);
+  set('#fKj',   r.kj);
+  set('#fP',    r.p);
+  set('#fC',    r.c);
+  set('#fF',    r.f);
+  set('#fFb',   r.fb);
+  set('#fSugar', r.sugar);
+  if (r.name && !$('#fName').value.trim()) $('#fName').value = r.name;
+
+  const card = $('#foodFormCard');
+  card.classList.remove('flash');
+  void card.offsetWidth;                       /* restart animation */
+  card.classList.add('flash');
+  setTimeout(() => card.classList.remove('flash'), 2000);
+  card.scrollIntoView({ behavior:'smooth', block:'start' });
+  if (!$('#fName').value.trim()) $('#fName').focus();
+
+  if (found){
+    const bits = [r.kj !== null ? fmt(r.kj) + ' kJ' : null, r.p !== null ? 'P ' + r.p + 'g' : null, r.serving ? r.serving + 'g serve' : null].filter(Boolean).join(' · ');
+    toast(`Prefilled ${found} field${found === 1 ? '' : 's'} (${bits}) — check & save`, 'success');
+  } else {
+    toast('No nutrition values detected — edit the text and try again', 'error');
+  }
+}
+
+function parseAndFill(src){
+  const raw = $('#labelText').value;
+  if (!raw.trim()){
+    toast('Paste some label text or scan a photo first', 'error');
+    return;
+  }
+  fillParsed(parseLabelText(raw));
+}
+
+/* =========================================================================
+   FOOD DATABASE CRUD
+   ========================================================================= */
+function startEditFood(id){
+  const f = foods.find(x => x.id === id);
+  if (!f) return;
+  editingFoodId = id;
+  $('#fName').value = f.name;
+  $('#fServing').value = f.serving;
+  $('#fKj').value = f.kj;
+  $('#fP').value = f.p;
+  $('#fC').value = f.c;
+  $('#fF').value = f.f;
+  $('#fFb').value = f.fb;
+  $('#fSugar').value = f.sugar || '';
+  $('#fCat').value = f.cat in CATEGORIES ? f.cat : 'other';
+  $('#foodFormTitle').textContent = 'Edit food';
+  $('#foodSubmitBtn').querySelector('span').textContent = 'Update food';
+  $('#cancelEditBtn').classList.remove('hidden');
+  $('#fName').focus();
+  $('#foodFormCard').scrollIntoView({ behavior:'smooth', block:'start' });
+}
+
+function cancelEditFood(){
+  editingFoodId = null;
+  $('#foodForm').reset();
+  $('#fServing').value = 100;
+  $('#foodFormTitle').textContent = 'Register a food';
+  $('#foodSubmitBtn').querySelector('span').textContent = 'Add food';
+  $('#cancelEditBtn').classList.add('hidden');
+}
+
+/* =========================================================================
+   DATA MANAGEMENT  (export / import / clear)
+   ========================================================================= */
+function exportData(){
+  const payload = { app:'kjtrack', version:2, exportedAt:new Date().toISOString(), profile, planId, foods, logs };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type:'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `kjtrack-backup-${today()}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 800);
+  toast('Backup downloaded');
+}
+
+function importData(file){
+  const reader = new FileReader();
+  reader.onload = () => {
+    let data;
+    try { data = JSON.parse(reader.result); }
+    catch(e){ toast('Import failed — that is not valid JSON', 'error'); return; }
+    if (!data || !Array.isArray(data.foods)){ toast('Import failed — not a KJ//TRACK backup file', 'error'); return; }
+    const when = data.exportedAt ? new Date(data.exportedAt).toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' }) : 'unknown date';
+    showConfirm({
+      title: 'Import backup?',
+      msg: `This replaces your current profile, plan, ${foods.length} foods and all logs with the backup from ${when}.`,
+      confirmText: 'Import',
+      onConfirm: () => {
+        profile = (data.profile && typeof data.profile === 'object') ? data.profile : null;
+        planId  = PLANS[data.planId] ? data.planId : 'maintenance';
+        foods   = data.foods.map(f => ({ sugar: 0, fb: 0, p: 0, c: 0, f: 0, kj: 0, serving: 100, cat: 'other', ...f, id: f.id || uid() }));
+        logs    = (data.logs && typeof data.logs === 'object') ? data.logs : {};
+        if (profile) LS.set('profile', profile); else LS.del('profile');
+        LS.set('plan', planId);
+        saveFoods();
+        saveLogs();
+        state.date = today();
+        cancelEditFood();
+        populateProfileForm();
+        resetCombos();
+        renderAll();
+        toast('Backup imported successfully');
+      },
+    });
+  };
+  reader.readAsText(file);
+}
+
+function clearAllData(){
+  showConfirm({
+    title: 'Clear all data?',
+    msg: 'This wipes your profile, selected plan, entire food database and every logged entry. It cannot be undone.',
+    confirmText: 'Wipe everything',
+    danger: true,
+    onConfirm: () => {
+      ['profile', 'plan', 'foods', 'logs'].forEach(k => LS.del(k));
+      profile = null;
+      planId = 'maintenance';
+      logs = {};
+      foods = SEED_FOODS.map(f => ({ ...f, id: uid() }));
+      LS.set('plan', planId);
+      saveFoods();
+      state.date = today();
+      cancelEditFood();
+      populateProfileForm();
+      resetCombos();
+      renderAll();
+      toast('All data cleared — fresh food database seeded', 'info');
+    },
+  });
+}
+
+/* =========================================================================
+   MODAL + TOAST
+   ========================================================================= */
+let modalCb = null;
+function showConfirm({ title, msg, confirmText = 'Confirm', danger = false, onConfirm }){
+  $('#mTitle').textContent = title;
+  $('#mMsg').textContent = msg;
+  const btn = $('#mConfirm');
+  btn.textContent = confirmText;
+  btn.className = danger ? 'btn-danger' : 'btn-primary';
+  modalCb = onConfirm || null;
+  const root = $('#modalRoot');
+  root.classList.remove('hidden');
+  root.classList.add('flex');
+}
+function closeModal(){
+  const root = $('#modalRoot');
+  root.classList.add('hidden');
+  root.classList.remove('flex');
+  modalCb = null;
+}
+
+function toast(msg, type = 'success'){
+  const icons = { success:'circle-check', error:'triangle-alert', info:'info' };
+  const el = document.createElement('div');
+  el.className = 'toast' + (type === 'error' ? ' toast-error' : '');
+  el.innerHTML = `<i data-lucide="${icons[type] || icons.success}" class="w-4 h-4 shrink-0 ${type === 'error' ? 'text-[#ff6b6b]' : 'text-[#00ff41]'}"></i><span>${msg}</span>`;
+  $('#toasts').appendChild(el);
+  refreshIcons();
+  requestAnimationFrame(() => el.classList.add('show'));
+  setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 400); }, 3200);
+}
+
+/* =========================================================================
+   PROFILE FORM
+   ========================================================================= */
+function populateProfileForm(){
+  $('#pName').value       = profile?.name ?? '';
+  $('#pAge').value        = profile?.age ?? '';
+  $('#pGender').value     = profile?.gender ?? 'male';
+  $('#pHeight').value     = profile?.height ?? '';
+  $('#pWeight').value     = profile?.weight ?? '';
+  $('#pGoalWeight').value = profile?.goalWeight ?? '';
+  $('#pActivity').value   = profile?.activity ?? 'moderate';
+}
+
+function collectProfile(){
+  const num = id => { const v = parseFloat($(id).value); return isFinite(v) ? v : null; };
+  profile = {
+    name:       $('#pName').value.trim(),
+    age:        num('#pAge'),
+    gender:     $('#pGender').value,
+    height:     num('#pHeight'),
+    weight:     num('#pWeight'),
+    goalWeight: num('#pGoalWeight'),
+    activity:   $('#pActivity').value || 'moderate',
+  };
+  LS.set('profile', profile);
+}
+
+/* =========================================================================
+   AMBIENT MATRIX BACKGROUND  (subtle, respects reduced-motion)
+   ========================================================================= */
+function initMatrix(){
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const c = $('#matrixBg');
+  const ctx = c.getContext('2d');
+  const chars = '01KJPCF<>[]{}#$/+=*';
+  const fs = 14;
+  let w, h, cols, drops;
+  function resize(){
+    w = c.width = innerWidth;
+    h = c.height = innerHeight;
+    cols = Math.ceil(w / (fs * 2));
+    drops = Array.from({ length: cols }, () => Math.random() * (h / fs));
+  }
+  resize();
+  addEventListener('resize', resize);
+  let last = 0;
+  ctx.fillStyle = '#0a0a0a';
+  ctx.fillRect(0, 0, w, h);
+  function tick(t){
+    requestAnimationFrame(tick);
+    if (t - last < 70) return;          /* throttle to ~14 fps */
+    last = t;
+    ctx.fillStyle = 'rgba(10,10,10,0.16)';
+    ctx.fillRect(0, 0, w, h);
+    ctx.font = fs + "px 'JetBrains Mono', monospace";
+    ctx.fillStyle = 'rgba(0,255,65,0.55)';
+    for (let i = 0; i < cols; i++){
+      const x = i * fs * 2;
+      const y = drops[i] * fs;
+      ctx.fillText(chars[(Math.random() * chars.length) | 0], x, y);
+      if (y > h && Math.random() > 0.975) drops[i] = 0;
+      drops[i]++;
+    }
+  }
+  requestAnimationFrame(tick);
+}
+
+/* =========================================================================
+   EVENT WIRING + INIT
+   ========================================================================= */
+function buildCategoryOptions(){
+  const opts = Object.entries(CATEGORIES).map(([k, v]) => `<option value="${k}">${v}</option>`).join('');
+  $('#fCat').innerHTML = opts;
+  $('#foodCatFilter').innerHTML = `<option value="">All categories</option>` + opts;
+}
+
+function buildPlanCards(){
+  $('#planGrid').innerHTML = Object.entries(PLANS).map(([key, p]) => `
+    <label class="plan-card ${key === planId ? 'selected' : ''}">
+      <input type="radio" name="plan" value="${key}" class="sr-only" ${key === planId ? 'checked' : ''}>
+      <div class="flex items-start justify-between gap-2">
+        <span class="plan-icon"><i data-lucide="${p.icon}" class="w-4 h-4"></i></span>
+        <span class="chip" data-plankj="${key}"></span>
+      </div>
+      <div class="mt-2.5 font-medium text-sm text-[#e8f5e9]">${p.name}</div>
+      <p class="mt-1 text-xs leading-relaxed text-[#7da87d]">${p.desc}</p>
+    </label>`).join('');
+}
+
+function bindEvents(){
+  /* Nav tabs */
+  $$('.tab-btn').forEach(b => b.addEventListener('click', () => switchTab(b.dataset.tab)));
+
+  /* Cross-page links */
+  document.addEventListener('click', e => {
+    const l = e.target.closest('[data-tablink]');
+    if (l) switchTab(l.dataset.tablink);
+  });
+
+  /* Log: date controls */
+  $('#prevDay').addEventListener('click', () => { state.date = addDays(state.date, -1); renderLog(); });
+  $('#nextDay').addEventListener('click', () => { state.date = addDays(state.date,  1); renderLog(); });
+  $('#todayBtn').addEventListener('click', () => { state.date = today(); renderLog(); });
+  $('#logDate').addEventListener('change', e => { if (e.target.value){ state.date = e.target.value; renderLog(); } });
+
+  /* Week strips: dashboard → open that day in the log; log → switch selected day */
+  $('#dashWeekStrip').addEventListener('click', e => {
+    const cell = e.target.closest('.daycell[data-day]');
+    if (!cell) return;
+    state.date = cell.dataset.day;
+    switchTab('log');
+  });
+  $('#logWeekStrip').addEventListener('click', e => {
+    const cell = e.target.closest('.daycell[data-day]');
+    if (!cell) return;
+    state.date = cell.dataset.day;
+    renderLog();
+  });
+
+  /* Log: add form */
+  $('#logAddBtn').addEventListener('click', () => addEntry('log'));
+  $('#logQty').addEventListener('input', () => updateAddPreview('log'));
+  $('#logQty').addEventListener('keydown', e => { if (e.key === 'Enter') addEntry('log'); });
+  $('#logUnit').addEventListener('change', () => updateAddPreview('log'));
+
+  /* Dashboard: quick add */
+  $('#quickAddBtn').addEventListener('click', () => addEntry('quick'));
+  $('#quickQty').addEventListener('input', () => updateAddPreview('quick'));
+  $('#quickQty').addEventListener('keydown', e => { if (e.key === 'Enter') addEntry('quick'); });
+
+  /* Entries: delete (delegated) */
+  $('#entriesList').addEventListener('click', e => {
+    const b = e.target.closest('[data-del-entry]');
+    if (!b) return;
+    logs[state.date] = getLog(state.date).filter(x => x.id !== b.dataset.delEntry);
+    if (!logs[state.date].length) delete logs[state.date];
+    saveLogs();
+    renderLog();
+    renderDashboard();
+    renderHistory();
+    toast('Entry removed');
+  });
+
+  /* Foods: search + filter */
+  $('#foodSearch').addEventListener('input', renderFoods);
+  $('#foodCatFilter').addEventListener('change', renderFoods);
+
+  /* Scanner: photo → OCR */
+  $('#scanFile').addEventListener('change', e => {
+    const f = e.target.files[0];
+    if (f) runOcr(f);
+    e.target.value = '';
+  });
+  $('#camFile').addEventListener('change', e => {
+    const f = e.target.files[0];
+    if (f) runOcr(f);
+    e.target.value = '';
+  });
+  /* Scanner: paste text → parse */
+  $('#parseBtn').addEventListener('click', () => parseAndFill('text'));
+  $('#clearLabelBtn').addEventListener('click', () => {
+    $('#labelText').value = '';
+    $('#scanThumb').classList.add('hidden');
+    $('#ocrWrap').classList.add('hidden');
+  });
+
+  /* Foods: add / edit submit */
+  $('#foodForm').addEventListener('submit', e => {
+    e.preventDefault();
+    const name = $('#fName').value.trim();
+    const serving = parseFloat($('#fServing').value);
+    const kj = parseFloat($('#fKj').value);
+    if (!name){ toast('Give the food a name', 'error'); return; }
+    if (!isFinite(serving) || serving <= 0){ toast('Serving size must be above zero', 'error'); return; }
+    if (!isFinite(kj) || kj < 0){ toast('Enter kilojoules per serving', 'error'); return; }
+    const g = id => { const v = parseFloat($(id).value); return isFinite(v) && v >= 0 ? v : 0; };
+    const data = {
+      name, serving, kj,
+      p: g('#fP'), c: g('#fC'), f: g('#fF'), fb: g('#fFb'), sugar: g('#fSugar'),
+      cat: CATEGORIES[$('#fCat').value] ? $('#fCat').value : 'other',
+    };
+    if (editingFoodId){
+      const f = foods.find(x => x.id === editingFoodId);
+      if (f) Object.assign(f, data);
+      toast(`Updated ${esc(name)}`);
+    } else {
+      foods.unshift({ id: uid(), ...data });
+      toast(`Registered ${esc(name)}`);
+    }
+    saveFoods();
+    cancelEditFood();
+    renderFoods();
+    resetCombos();
+    updateSettingsStats();
+  });
+  $('#cancelEditBtn').addEventListener('click', cancelEditFood);
+
+  /* Foods grid: edit / delete (delegated) */
+  $('#foodsGrid').addEventListener('click', e => {
+    const eb = e.target.closest('[data-edit]');
+    const db = e.target.closest('[data-del]');
+    if (eb){ startEditFood(eb.dataset.edit); return; }
+    if (db){
+      const f = foods.find(x => x.id === db.dataset.del);
+      showConfirm({
+        title: 'Delete food?',
+        msg: `Remove “${f ? f.name : 'this food'}” from your database? Days you've already logged keep their saved values.`,
+        confirmText: 'Delete',
+        danger: true,
+        onConfirm: () => {
+          foods = foods.filter(x => x.id !== db.dataset.del);
+          saveFoods();
+          if (editingFoodId === db.dataset.del) cancelEditFood();
+          renderFoods();
+          resetCombos();
+          updateSettingsStats();
+          toast('Food deleted');
+        },
+      });
+    }
+  });
+
+  /* History: open a week in the log */
+  $('#weekBody').addEventListener('click', e => {
+    const tr = e.target.closest('tr[data-week]');
+    if (!tr) return;
+    state.date = tr.dataset.week;
+    switchTab('log');
+  });
+
+  /* Profile fields: autosave on change */
+  $$('.profile-field').forEach(el => el.addEventListener('change', () => {
+    collectProfile();
+    renderProfileResults();
+    renderDashboard();
+    renderLog();
+    renderHistory();
+  }));
+
+  /* Diet plan radio cards */
+  $('#planGrid').addEventListener('change', e => {
+    if (e.target.name !== 'plan') return;
+    planId = e.target.value;
+    LS.set('plan', planId);
+    renderProfileResults();
+    renderDashboard();
+    renderLog();
+    renderHistory();
+    toast(`Protocol set — ${PLANS[planId].name}`);
+  });
+
+  /* Settings: export / import / clear */
+  $('#exportBtn').addEventListener('click', exportData);
+  $('#importFile').addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (file) importData(file);
+    e.target.value = '';
+  });
+  $('#clearBtn').addEventListener('click', clearAllData);
+
+  /* Modal */
+  $('#mConfirm').addEventListener('click', () => { const cb = modalCb; closeModal(); if (cb) cb(); });
+  $$('#modalRoot [data-close]').forEach(el => el.addEventListener('click', closeModal));
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+}
+
+/* ---------------- Boot ---------------- */
+buildCategoryOptions();
+buildPlanCards();
+populateProfileForm();
+setupCombo('log',   () => updateAddPreview('log'));
+setupCombo('quick', () => updateAddPreview('quick'));
+bindEvents();
+renderAll();
+switchTab('dashboard');
+refreshIcons();
+initMatrix();
+</script>
+</body>
+</html>
